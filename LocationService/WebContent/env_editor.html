@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="copyright" content="Copyright (c) IBM Corporation 2014, 2015. This page is made available under MIT license.">
+<title>BLEBeacon Environment Editor</title>
+<script type="text/javascript" src="js/lib/jquery/jquery-1.11.2.min.js"></script>
+<link rel="stylesheet" type="text/css"href="js/lib/OpenLayers-2.13.1/theme/default/style.css">
+<script type="text/javascript"src="js/lib/OpenLayers-2.13.1/OpenLayers.js"></script>
+<script type="text/javascript" src="js/mapview.js"></script>
+<script type="text/javascript">
+	$(document).ready(function() {
+		mapView = (function() {
+			var markers = [];
+			var options = {};
+			
+			var viewer = new MapViewer("mapdiv", {
+				'click' : true,
+				'enableEdit' : true,
+				'mapProjection' : new OpenLayers.Projection('EPSG:3857'),
+				'externalProjection' : new OpenLayers.Projection('PROJ:EXTERNAL'),
+				'mousePositionFormatOutput' : function(lonLat) {
+					return (lonLat.lon).toFixed(2) + 'm, ' + (lonLat.lat).toFixed(2) + 'm';
+				},
+				'onImport' : function(features) {
+					$("#image_url").val(features.image);
+					$("#ppm").val(features.ppm);
+					showMap();
+				},
+				'beforeExport' : function(ret) {
+					var image = new Image();
+					image.src = $("#image_url").val();
+					ret.image = getBase64Image(image);
+					ret.ppm = $("#ppm").val();
+					
+					function getBase64Image(img) {
+					    var canvas = document.createElement("canvas");
+					    canvas.width = img.width;
+					    canvas.height = img.height;
+					    if (canvas.width == 0 || canvas.height == 0) {
+					    	return "";
+					    }
+
+					    var ctx = canvas.getContext("2d");
+					    ctx.drawImage(img, 0, 0);
+					    var dataURL = canvas.toDataURL("image/png");
+					    return dataURL;
+					}
+				}
+			});
+			OpenLayers.Projection.addTransform('EPSG:3857', 'PROJ:EXTERNAL', function(point) {
+				var mapInfo = viewer && viewer.getMapInfo();
+				if (mapInfo) {
+					point.x = (point.x - mapInfo.origin.x) / mapInfo.ppm.x;
+					point.y = (point.y - mapInfo.origin.y) / mapInfo.ppm.y;
+				}
+				return point;
+			});
+			OpenLayers.Projection.addTransform('PROJ:EXTERNAL', 'EPSG:3857', function(point) {
+				var mapInfo = viewer && viewer.getMapInfo();
+				if (mapInfo) {
+					point.x = point.x * mapInfo.ppm.x + mapInfo.origin.x;
+					point.y = point.y * mapInfo.ppm.y + mapInfo.origin.y;
+				}
+				return point;
+			});
+
+			function showMap() {
+				if ($("#image_url").val()) {
+					var i = new Image();
+					i.onload = function() {	
+						console.log("image onload");
+						var mapInfo = {
+							'imageURL' : $("#image_url").val(),
+							'width' : i.width,
+							'height' :i.height,
+							'origin' : {
+								'x' : i.width/2,
+								'y' : i.height/2
+							},
+							'ppm' : {
+								'x' : $("#ppm").val(),
+								'y' : $("#ppm").val()
+							}
+						};
+						// Draw Map
+						viewer.show(mapInfo);
+						viewer.drawGrid({
+							'x' : mapInfo.origin.x,
+							'y' : mapInfo.origin.y
+						}, mapInfo.ppm);
+					}
+					i.src = $("#image_url").val();
+				} else {
+					console.log("image onload");
+					var mapInfo = {
+						'imageURL' : "",
+						'width' : 1000,
+						'height' :500,
+						'origin' : {
+							'x' : 500,
+							'y' : 250,
+						},
+						'ppm' : {
+							'x' : $("#ppm").val(),
+							'y' : $("#ppm").val()
+						}
+					};
+					// Draw Map
+					viewer.show(mapInfo);
+					viewer.drawGrid({
+						'x' : mapInfo.origin.x,
+						'y' : mapInfo.origin.y
+					}, mapInfo.ppm);
+				}
+				
+
+			}
+			$("#image_url,#ppm").change(function(e) {
+				showMap();
+			});
+			$("#image_file").change(function(e) {
+				var file = $(this)[0].files[0];
+				var fr = new FileReader();
+				fr.onload = function(e) {
+					$("#image_url").val(e.target.result);
+					showMap();
+				}
+				fr.readAsDataURL(file);
+			});
+			
+			showMap();
+			
+			function addMarker(marker) {
+				markers.push(marker);
+				viewer.drawMarker(markers);
+			}
+			return {
+				addMarker: addMarker,
+				drawParticle: function(){},
+				viewer: viewer
+			};
+		})();
+	});
+
+	var csv;
+	var interval;
+	
+	function start(_user) {
+		user = _user;
+		interval = setInterval(processNext, 1000);
+		//processNext();
+	}
+	
+	function startbe(_user) {
+		user = _user;
+		processNext(function() {
+			startbe(_user);
+		});
+	}
+
+	function getSelectValue(id) {
+		return $("#" + id)[0].options[$("#" + id)[0].selectedIndex].value;
+	}
+
+	var prev = null;
+	current = null;
+	function processNext(callback) {
+		if (csv.length <= csvIndex) {
+			clearInterval(interval);
+		}
+		var sensorCSV = "";
+		var start = (new Date()).getTime();
+		while (true) {
+			var line = csv[csvIndex++];
+			if (!line || !line.match(/Beacon/)) {
+				if (line.match(/(Acc|Motion)/)) {
+					var items = line.split(" *, *").slice(0, 5);
+					sensorCSV += items.join(",") + "\n";
+				}
+				else if (line.match(/Moving/)) {
+					var items = line.split(" *, *");
+					sensorCSV += items.join(",") + "\n";
+				}
+				else if (line.match(/Reset/)) {
+					var items = line.split(",");
+					var x = parseFloat(items[2]);
+					var y = parseFloat(items[3]);
+					var z = parseFloat(items[4]);
+					var o = parseFloat(items[5]);
+
+					var data = {
+						xtrue : x,
+						ytrue : y,
+						ztrue : z,
+						theta : o
+					};
+					data.uuid = uuid;
+					_reset(data, user_id);
+				}
+				continue;
+			}
+
+			var data = [];
+			var obj = {};
+			data.push(obj);
+			obj.uuid = uuid;
+			obj.data = [];
+			var items = line.split(",");
+			var x = parseFloat(items[2]);
+			var y = parseFloat(items[3]);
+			var z = parseFloat(items[4]);
+			var f = parseFloat(items[5]);
+			var num = parseInt(items[6]);
+			current = {
+				x : x,
+				y : y
+			};
+			for (var j = 0; j < num; j++) {
+				var major = parseInt(items[7 + j * 3 + 0]);
+				var minor = parseInt(items[7 + j * 3 + 1]);
+				var rssi = parseInt(items[7 + j * 3 + 2]);
+				obj.data.push({
+					major : major,
+					minor : minor,
+					rssi : rssi
+				});
+			}
+			var correctData = false;
+			if (correctData) {
+				while (sensorCSV.split("\n").length < 200) {
+					var line = csv[csvIndex++];
+					if (!line || !line.match(/Beacon/)) {
+						if (line.match(/(Acc|Motion)/)) {
+							var items = line.split(" *, *").slice(0, 5);
+							sensorCSV += items.join(",") + "\n";
+						}
+					} else {
+						console.log("SKIP BEACON!!!");
+					}
+				}
+			}
+			console.log(["sensorCSV.length", sensorCSV.split("\n").length]);
+			obj.sensorCSV = sensorCSV;
+
+			if (prev) {
+				var o = Math.atan2(y - prev.y, x - prev.x);
+				$("#current_location").val(x + "," + y + "," + o);
+				current.o = o;
+
+				if (mapView) {
+					mapView.addMarker({
+						'x' : x,
+						'y' : y,
+						'type' : 'blue'
+					});
+				}
+			}
+			prev = current;
+
+			//console.log(data);
+			//console.log(JSON.stringify(data));
+			var user = user_id;
+			$.ajax({
+				'type' : 'POST',
+				'url' : 'location/beacons/' + user,
+				'processData' : false,
+				'contentType' : 'application/json',
+				'data' : JSON.stringify(data),
+				'success' : function(loc) {
+					var diff = (new Date()).getTime() - start;
+					//console.log('success: ' + JSON.stringify(loc));
+					$('#loc').html(
+							loc.x+", "+loc.y+", "+loc.z + " - " + diff + "ms<br>"
+									+ $('#loc').html());
+
+					if (mapView) {
+						mapView.addMarker({
+							'x' : loc.x,
+							'y' : loc.y,
+							'type' : 'green'
+						});
+						mapView.drawParticle(loc.states);
+					}
+					if (callback) {
+						callback();
+					}
+					
+				},
+				'error' : function() {
+					console.log('error: ');
+				}
+			});
+
+			break;
+		}
+	}
+
+	function resetByTest() {
+		var data = {
+			xtrue : current.x,
+			ytrue : current.y,
+			ztrue : 0,
+			theta : current.o
+		};
+		data.uuid = uuid;
+		_reset(data, user_id);
+	}
+
+	function load() {
+		//loadcsv();
+	}
+
+	function loadcsv() {
+		var path = getSelectValue("csvpath");
+		uuid = path.split("/")[2].split("_")[0];
+		$("#status").html(path + " is loading<br>");
+		$.ajax({
+			url : path,
+			success : function(data) {
+				csv = data.split(/[\r\n]+/);//.slice(0,10000);
+				csvIndex = 0;
+				$("#status").html(
+						$("#status").html() + "csv is loaded<br>File size is "
+								+ data.length + " bytes (" + csv.length
+								+ " lines)");
+			}
+		});
+	}
+
+	function reset() {
+		var data = {
+			xtrue : parseInt($("#xtrue").val()),
+			ytrue : parseInt($("#ytrue").val()),
+			ztrue : parseInt($("#ztrue").val()),
+			theta : parseInt($("#theta").val())
+		}
+		data.uuid = uuid;
+		_reset(data, user_id);
+	}
+
+	function _reset(data, user) {
+		console.log(["reset", data, user]);
+		$.ajax({
+			'type' : 'POST',
+			'url' : 'location/beacons/reset/' + user,
+			'processData' : false,
+			'contentType' : 'application/json',
+			'data' : JSON.stringify(data),
+			'success' : function(result) {
+				console.log(result);
+			},
+			'error' : function() {
+				console.log('error: ');
+			}
+		});
+	}
+
+	var user_id = null;
+	var uuid = "";
+	
+</script>
+<style>
+.control {
+	width:700px;
+	display:inline-block;
+	min-height: 250px;
+	max-height: 300px;
+	border:1px solid lightgray;
+	vertical-align: top;
+	word-break: break-all;
+	overflow-y: scroll;
+}
+
+</style>
+</head>
+<body onload="load()">
+	<input type="file" id="image_file">
+	Image URL: <input type="text" id="image_url" size=80 value="">
+	PPM: <input type="text" id="ppm" size=5 value="20">
+	<div id="menu"></div>
+	<div id="mapdiv"
+		style="width: 100%; height: 750px; border: 1px solid black;"></div>
+
+</body>
+</html>

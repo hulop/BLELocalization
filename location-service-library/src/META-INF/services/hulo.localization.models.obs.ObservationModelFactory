@@ -1,0 +1,2 @@
+hulo.localization.models.obs.ParticleFilterModelFactory
+hulo.localization.models.obs.GaussianProcessLDPLMeanModelFactory

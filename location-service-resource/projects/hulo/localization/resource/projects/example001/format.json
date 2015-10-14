@@ -1,0 +1,17 @@
+{
+	"training":{
+		"readMethod":"readJSONSamples"
+	},
+	"test":{
+		"readMethod":"readCSVWalkingSamples"
+	},
+	"map":{
+		"beacons":{
+			"readMethod":"readMapBLEBeacons"
+		}
+	},
+	"information":{
+		"UUID":"00000000-0000-0000-0000-000000000000",
+		"site_id":"SAMPLE_SYNTHETIC_PLACE"
+	}
+}

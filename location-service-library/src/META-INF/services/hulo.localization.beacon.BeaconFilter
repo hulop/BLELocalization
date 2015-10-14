@@ -1,0 +1,3 @@
+hulo.localization.beacon.AbstractBeaconFilter
+hulo.localization.beacon.ClosestBeaconFilter
+hulo.localization.beacon.NormedStrongestBeaconFilter

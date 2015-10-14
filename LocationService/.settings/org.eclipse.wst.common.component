@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?><project-modules id="moduleCoreId" project-version="1.5.0">
+    <wb-module deploy-name="LocationService">
+        <wb-resource deploy-path="/" source-path="/WebContent" tag="defaultRootSource"/>
+        <wb-resource deploy-path="/WEB-INF/classes" source-path="/src"/>
+        <wb-resource deploy-path="/WEB-INF/classes" source-path="/.apt_generated"/>
+        <wb-resource deploy-path="/WEB-INF/classes" source-path="/resource"/>
+        <dependent-module archiveName="location-service-library.jar" deploy-path="/WEB-INF/lib" handle="module:/resource/location-service-library/location-service-library">
+            <dependency-type>uses</dependency-type>
+        </dependent-module>
+        <dependent-module archiveName="location-service-resource.jar" deploy-path="/WEB-INF/lib" handle="module:/resource/location-service-resource/location-service-resource">
+            <dependency-type>uses</dependency-type>
+        </dependent-module>
+        <property name="java-output-path" value="/LocationService/build/classes"/>
+        <property name="context-root" value="LocationService"/>
+    </wb-module>
+</project-modules>

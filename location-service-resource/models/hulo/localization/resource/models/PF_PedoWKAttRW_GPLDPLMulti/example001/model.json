@@ -1,0 +1,86 @@
+{
+	"name": "ParticleFilterWithSensor",
+	"parameters": {
+		"initialLocations": "trainingSamples",
+		"nParticles": 1000,
+		"averagingType":"simpleAverage",
+		"resamplingMethod":"systematicResampling",
+		"alphaWeaken":1.0,
+
+		"ObservationModel": {
+			"name": "GaussianProcessLDPLMeanMultiModel",
+			"parameters": {
+				"LDPLParameters": {
+					"heightDifference": 0.1,
+					"A": -72,
+					"n": 2.4,
+					"fa": 0.0,
+					"fb": 0.0,
+					"lambdas": [1000.0, 0.001, 1.0, 1.0]
+				},
+				"GPParameters": {
+					"lengthes": [2.0, 2.0, 0.01],
+					"sigmaP": 4.0,
+					"sigmaN": 2.0,
+					"constVar": 1,
+					"useMask": 1
+				},
+				"BeaconFilter":{
+					"name":"NormedStrongestBeaconFilter",
+					"parameters":{
+						"doNormalize":false,
+						"kBeacons":100,
+					},
+				},
+				"options": {
+					"optimizeHyperParameters": true
+				}
+			}
+		},
+		"SystemModel": {
+			"name": "PoseRandomWalker",
+			"parameters": {
+				"sigma": 1.0,
+				"Pedometer": {
+					"name": "PedometerPeakDetect",
+					"parameters": {
+						"stepCountPeakWindow": 30,
+						"walkDetectStdWindow": 80,
+						"stepCountMovingAverageWindow": 30,
+						"walkDetectSigmaThreshold": 0.6
+					}
+				},
+				"OrientationMeter": {
+					"name": "OrientationMeterAverageYaw"
+				},
+				"PoseSetting":{
+					"meanVelocityRep":1.0,
+					"stdVelocityRep":0.2,
+					"driftVelocityRep":0.05,
+					"minVelocityRep":0.1,
+					"maxVelocityRep":1.5,
+
+					"meanStepLength":0.8,
+					"stdStepLength":0.1,
+					"minStepLength":0.1,
+					"maxStepLength":0.7,
+
+					"stdOrientation":5.0,
+					"stdOrientationBias":2.0,
+					"stdNSteps":0.0,
+					"minNSteps":-1.0,
+					"maxNSteps":3.0,
+
+					"resetRate":0.0,
+
+					"constantsPrior":"truncatedNormalDistribution",
+					"velocityMode":"constantVelocity",
+					"floorMoveMode":"floorsFree",
+
+					"meanRssiBias":0.0,
+					"stdRssiBias":0.0,
+				}
+			}
+		}
+	}
+}

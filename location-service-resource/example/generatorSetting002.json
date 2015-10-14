@@ -1,0 +1,41 @@
+{
+	"Data":{
+	"project" : "../location-service-resource/projects/hulo/localization/resource/projects/example002",
+	"map" :"map.json",
+	"train":"trainDataSample.json",
+	"test":"00000000-0000-0000-0000-000000000000_Example002.csv",
+	},
+	"Beacon": {
+		"GP": {
+			"sigma_a": 1.0,
+			"lengthes": [1.0,
+			1.0,
+			0.01],
+			"sigma_n": 0.0001
+		},
+		"LDPL": {
+			"n":2.0,
+			"A": -70,
+			"fa": 4.0,
+			"fb": 15.0,
+			"distOffset": 0.1
+		},
+		"Noise": {
+			"sigma":2.0
+		}
+	},
+	"Motion": {
+		"accStds": [0.0,
+		0.0,
+		0.0],
+		"attStds": [0.0,
+		0.0,
+		0.0],
+		"freq": 100,
+		"ampG": 2.5,
+		"stepPerSec": 2.0
+	},
+	"Random":{
+			"seed":1234
+	}
+}

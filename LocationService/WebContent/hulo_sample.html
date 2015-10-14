@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="copyright" content="Copyright (c) IBM Corporation 2014, 2015. This page is made available under MIT license.">
+<title>BLEBeacon Location API Tester</title>
+<script type="text/javascript" src="js/lib/jquery/jquery-1.11.2.min.js"></script>
+<link rel="stylesheet" type="text/css"href="js/lib/OpenLayers-2.13.1/theme/default/style.css">
+<script type="text/javascript"src="js/lib/OpenLayers-2.13.1/OpenLayers.js"></script>
+<script type="text/javascript" src="js/mapview.js"></script>
+<script type="text/javascript">
+	$(document).ready(function() {
+		mapView = (function() {
+			var markers = [];
+			var options = {};
+			
+			var viewer = new MapViewer("mapdiv", {
+				'click' : true,
+				'enableEdit' : false,
+				'mapProjection' : new OpenLayers.Projection('EPSG:3857'),
+				'externalProjection' : new OpenLayers.Projection('PROJ:EXTERNAL'),
+				'mousePositionFormatOutput' : function(lonLat) {
+					return (lonLat.lon).toFixed(2) + 'm, ' + (lonLat.lat).toFixed(2) + 'm';
+				}
+			});
+			OpenLayers.Projection.addTransform('EPSG:3857', 'PROJ:EXTERNAL', function(point) {
+				var mapInfo = viewer && viewer.getMapInfo();
+				if (mapInfo) {
+					point.x = (point.x - mapInfo.origin.x) / mapInfo.ppm.x;
+					point.y = (point.y - mapInfo.origin.y) / mapInfo.ppm.y;
+				}
+				return point;
+			});
+			OpenLayers.Projection.addTransform('PROJ:EXTERNAL', 'EPSG:3857', function(point) {
+				var mapInfo = viewer && viewer.getMapInfo();
+				if (mapInfo) {
+					point.x = point.x * mapInfo.ppm.x + mapInfo.origin.x;
+					point.y = point.y * mapInfo.ppm.y + mapInfo.origin.y;
+				}
+				return point;
+			});
+
+			var mapInfo = {
+				'imageURL' : null,
+				'width' : 500,
+				'height' : 500,
+				'origin' : {
+					'x' : 250,
+					'y' : 250
+				},
+				'ppm' : {
+					'x' : 20,
+					'y' : 20
+				}
+			};
+			// Draw Map
+			viewer.show(mapInfo);
+			viewer.drawGrid({
+				'x' : mapInfo.origin.x,
+				'y' : mapInfo.origin.y
+			}, mapInfo.ppm);
+			
+			function addMarker(marker) {
+				markers.push(marker);
+				viewer.drawMarker(markers);
+			}
+			return {
+				addMarker: addMarker,
+				drawParticle: function(){}
+			};
+		})();
+	});
+
+	var csv;
+	var interval;
+	
+	function start(_user) {
+		user = _user;
+		interval = setInterval(processNext, 1000);
+		//processNext();
+	}
+	
+	function startbe(_user) {
+		user = _user;
+		processNext(function() {
+			startbe(_user);
+		});
+	}
+
+	function getSelectValue(id) {
+		return $("#" + id)[0].options[$("#" + id)[0].selectedIndex].value;
+	}
+
+	var prev = null;
+	current = null;
+	function processNext(callback) {
+		if (csv.length <= csvIndex) {
+			clearInterval(interval);
+		}
+		var sensorCSV = "";
+		var start = (new Date()).getTime();
+		while (true) {
+			var line = csv[csvIndex++];
+			if (!line || !line.match(/Beacon/)) {
+				if (line.match(/(Acc|Motion)/)) {
+					var items = line.split(" *, *").slice(0, 5);
+					sensorCSV += items.join(",") + "\n";
+				}
+				else if (line.match(/Moving/)) {
+					var items = line.split(" *, *");
+					sensorCSV += items.join(",") + "\n";
+				}
+				else if (line.match(/Reset/)) {
+					var items = line.split(",");
+					var x = parseFloat(items[2]);
+					var y = parseFloat(items[3]);
+					var z = parseFloat(items[4]);
+					var o = parseFloat(items[5]);
+
+					var data = {
+						xtrue : x,
+						ytrue : y,
+						ztrue : z,
+						theta : o
+					};
+					data.uuid = uuid;
+					_reset(data, user_id);
+				}
+				continue;
+			}
+
+			var data = [];
+			var obj = {};
+			data.push(obj);
+			obj.uuid = uuid;
+			obj.data = [];
+			var items = line.split(",");
+			var x = parseFloat(items[2]);
+			var y = parseFloat(items[3]);
+			var z = parseFloat(items[4]);
+			var f = parseFloat(items[5]);
+			var num = parseInt(items[6]);
+			current = {
+				x : x,
+				y : y
+			};
+			for (var j = 0; j < num; j++) {
+				var major = parseInt(items[7 + j * 3 + 0]);
+				var minor = parseInt(items[7 + j * 3 + 1]);
+				var rssi = parseInt(items[7 + j * 3 + 2]);
+				obj.data.push({
+					major : major,
+					minor : minor,
+					rssi : rssi
+				});
+			}
+			var correctData = false;
+			if (correctData) {
+				while (sensorCSV.split("\n").length < 200) {
+					var line = csv[csvIndex++];
+					if (!line || !line.match(/Beacon/)) {
+						if (line.match(/(Acc|Motion)/)) {
+							var items = line.split(" *, *").slice(0, 5);
+							sensorCSV += items.join(",") + "\n";
+						}
+					} else {
+						console.log("SKIP BEACON!!!");
+					}
+				}
+			}
+			console.log(["sensorCSV.length", sensorCSV.split("\n").length]);
+			obj.sensorCSV = sensorCSV;
+
+			if (prev) {
+				var o = Math.atan2(y - prev.y, x - prev.x);
+				$("#current_location").val(x + "," + y + "," + o);
+				current.o = o;
+
+				if (mapView) {
+					mapView.addMarker({
+						'x' : x,
+						'y' : y,
+						'type' : 'blue'
+					});
+				}
+			}
+			prev = current;
+
+			var user = user_id;
+			$.ajax({
+				'type' : 'POST',
+				'url' : 'location/beacons/' + user,
+				'processData' : false,
+				'contentType' : 'application/json',
+				'data' : JSON.stringify(data),
+				'success' : function(loc) {
+					var diff = (new Date()).getTime() - start;
+
+					$('#loc').html(
+							loc.x+", "+loc.y+", "+loc.z + " - " + diff + "ms<br>"
+									+ $('#loc').html());
+
+					if (mapView) {
+						mapView.addMarker({
+							'x' : loc.x,
+							'y' : loc.y,
+							'type' : 'green'
+						});
+						mapView.drawParticle(loc.states);
+					}
+					if (callback) {
+						callback();
+					}
+
+				},
+				'error' : function() {
+					console.log('error: ');
+				}
+			});
+
+			break;
+		}
+	}
+
+	function resetByTest() {
+		var data = {
+			xtrue : current.x,
+			ytrue : current.y,
+			ztrue : 0,
+			theta : current.o
+		};
+		data.uuid = uuid;
+		_reset(data, user_id);
+	}
+
+	function clearReset() {
+		var data = {};
+		data.uuid = uuid;
+		_reset(data, user_id);
+	}
+
+	function load() {
+		loadcsv();
+	}
+
+	function loadcsv() {
+		var path = getSelectValue("csvpath");
+		uuid = path.split("/")[2].split("_")[0];
+		$("#status").html(path + " is loading<br>");
+		$.ajax({
+			url : path,
+			success : function(data) {
+				csv = data.split(/[\r\n]+/);//.slice(0,10000);
+				csvIndex = 0;
+				$("#status").html(
+						$("#status").html() + "csv is loaded<br>File size is "
+								+ data.length + " bytes (" + csv.length
+								+ " lines)");
+			}
+		});
+	}
+
+	function reset() {
+		var data = {
+			xtrue : parseInt($("#xtrue").val()),
+			ytrue : parseInt($("#ytrue").val()),
+			ztrue : parseInt($("#ztrue").val()),
+			theta : parseInt($("#theta").val())
+		}
+		data.uuid = uuid;
+		_reset(data, user_id);
+	}
+
+	function _reset(data, user) {
+		console.log([ "reset", data, user ]);
+		$.ajax({
+			'type' : 'POST',
+			'url' : 'location/beacons/reset/' + user,
+			'processData' : false,
+			'contentType' : 'application/json',
+			'data' : JSON.stringify(data),
+			'success' : function(result) {
+				console.log(result);
+			},
+			'error' : function() {
+				console.log('error: ');
+			}
+		});
+	}
+
+	var user_id = null;
+	var uuid = "";
+</script>
+<style>
+.control {
+	width:800px;
+	display:inline-block;
+	min-height: 250px;
+	max-height: 300px;
+	border:1px solid lightgray;
+	vertical-align: top;
+	word-break: break-all;
+	overflow-y: scroll;
+}
+
+</style>
+</head>
+<body onload="load()">
+<h1>Localization based on BLE beacon and smartphone sensor data</h1>
+<div class="control">
+
+	<!-- <textarea id="data" cols="80" rows="20"></textarea> -->
+	Test: <select id="csvpath">
+	<option>./testdata/00000000-0000-0000-0000-000000000000_Example001.csv</option>
+	</select>
+
+	<button id="loadcsv" onclick="loadcsv()"">Load</button><br>
+	<div id="status">
+	</div>
+	<button onclick='start(user_id)'>Start(simulate)</button>
+	<button onclick='startbe(user_id)'>Start(best effort)</button>
+	<button onclick="clearInterval(interval)">Stop</button>
+	<input type="text" readonly disabled id="current_location" size="30">
+	<button onclick="resetByTest()">Reset</button>
+	<button onclick="clearReset()">Clear</button><br>
+	<div id="loc"></div>
+</div>
+<hr>
+	<h1>Map</h1>
+	<div id="menu"></div>
+	<div id="mapdiv"
+		style="width: 1100px; height: 750px; border: 1px solid black;"></div>
+
+</body>
+</html>

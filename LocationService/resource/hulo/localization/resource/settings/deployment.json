@@ -1,0 +1,18 @@
+{
+	"models_path": "/hulo/localization/resource/models",
+	"projects_path": "/hulo/localization/resource/projects",
+
+	"configurations":[
+		{
+			"site_id": "SAMPLE_SYNTHETIC_PLACE",
+			"uuid": "00000000-0000-0000-0000-000000000000",
+			"project": "example001",
+			"_model": "PF_PedoWKRW_GPLDPLMulti/example001",
+			"model": "PF_PedoWKAttRW_GPLDPLMulti/example001",
+		}
+	],
+
+	"options":{
+		"nThreads":3
+	}
+}

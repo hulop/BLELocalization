@@ -1,0 +1,13 @@
+Please put libraries as below.
+
+LocationService
+	- WebContent
+		- js
+			- lib
+				- jquery
+				- OpenLayers-2.13.1
+
+location-service-library
+	- lib
+		- commons-math3-3.3.jar
+		- wink-1.4.jar
