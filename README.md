@@ -40,7 +40,7 @@ The localization algorithm is based on Monte Carlo localization using a particle
 -----
 
 # Sample Web API
-The localization library is wrapped by an example servlet. ([You can try](#test)])
+The localization library is wrapped by an example servlet. ([You can try](#test))
 This section describes about Web API that calculate location from beacon signals and motion data.
 
 ## POST /locations/beacons
