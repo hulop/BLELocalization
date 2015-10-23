@@ -249,7 +249,6 @@ public class GaussianProcessLDPLMean extends GaussianProcess {
 			}
 		}
 		updateByActiveBeaconList(actBeaList);
-
 		return this;
 	}
 

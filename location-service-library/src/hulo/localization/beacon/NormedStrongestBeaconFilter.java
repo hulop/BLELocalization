@@ -112,7 +112,7 @@ public class NormedStrongestBeaconFilter extends AbstractBeaconFilter implements
 		final StringBuilder sb = new StringBuilder();
 		if (n != m) {
 			sb.setLength(0);
-			sb.append("NormedStrongestBeaconFilter reduced the number of beacons "+n+">>"+m+". ");
+			sb.append("NormedStrongestBeaconFilter #beacons "+n+">>"+m+". ");
 			sb.append("RSSI: ");
 			for(Beacon b: beaconsTmp){
 				sb.append(b.getRssi()+",");

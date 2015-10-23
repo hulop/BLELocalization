@@ -66,7 +66,6 @@ public class GaussianProcessLDPLMeanModel implements ObservationModel, Cloneable
 	GaussianProcessLDPLMean gpLDPL;
 
 	List<Sample> samples;
-
 	List<BLEBeacon> bleBeacons;
 	double stdev=3.0;
 	double lengthes[] = {1.0,1.0,0.1};
@@ -358,9 +357,7 @@ public class GaussianProcessLDPLMeanModel implements ObservationModel, Cloneable
 		}
 	}
 
-
-
-	MultivariateFunction generateLDPLLOOMSE(final GaussianProcessLDPLMeanModel model, final double[] initPoint){
+	MultivariateFunction generateLDPLObjectiveFunction(final GaussianProcessLDPLMeanModel model, final double[] initPoint){
 
 		MultivariateFunction negaLLfunc = new MultivariateFunction(){
 			@Override
@@ -372,8 +369,7 @@ public class GaussianProcessLDPLMeanModel implements ObservationModel, Cloneable
 				gpLDPL.setParams(params);
 				model.train(samples);
 				gpLDPL.updateByActiveBeaconList(activeBeaconList);
-				double logLikelihood = 0;
-				logLikelihood = gpLDPL.looPredLogLikelihood();
+				double logLikelihood = gpLDPL.looPredLogLikelihood();
 				double looMSE = gpLDPL.looMSE();
 
 				StringBuilder sb = new StringBuilder();
@@ -381,8 +377,8 @@ public class GaussianProcessLDPLMeanModel implements ObservationModel, Cloneable
 				sb.append(", LOOMSE="+looMSE);
 				sb.append(", logLikelihood="+(-logLikelihood));
 				System.out.println(sb.toString());
-
-				return looMSE;
+				
+				return -logLikelihood;
 			}
 		};
 		return negaLLfunc;
@@ -395,7 +391,8 @@ public class GaussianProcessLDPLMeanModel implements ObservationModel, Cloneable
 		double[] dPointInit = {Math.abs(params[0])/10.0,
 								Math.abs(params[1])/10.0
 								};
-		MultivariateFunction negaLLfunc = generateLDPLLOOMSE(this, pointInit);
+		
+		MultivariateFunction negaLLfunc = generateLDPLObjectiveFunction(this, pointInit);
 		minimize(negaLLfunc, pointInit, dPointInit);
 	}
 
@@ -407,12 +404,11 @@ public class GaussianProcessLDPLMeanModel implements ObservationModel, Cloneable
 								Math.abs(params[1])/10.0,
 								Math.abs(params[2])/10.0,
 								Math.abs(params[3])/10.0
-								};
-		MultivariateFunction negaLLfunc = generateLDPLLOOMSE(this, pointInit);
+							};
+		MultivariateFunction negaLLfunc = generateLDPLObjectiveFunction(this, pointInit);
 		minimize(negaLLfunc, pointInit, dPointInit);
 	}
-
-
+	
 	void optimizeForLDPLModel(){
 		if(isSingleFloor(samples)){
 			optimizeForLDPL();
@@ -519,7 +515,7 @@ public class GaussianProcessLDPLMeanModel implements ObservationModel, Cloneable
 	}
 
 	void optimize(){
-		optimizeForLDPLModel();
+		optimizeForLDPL();
 		optimizeForGPIsoScaleLOOMSE();
 	}
 

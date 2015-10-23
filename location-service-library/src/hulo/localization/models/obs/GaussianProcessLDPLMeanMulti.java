@@ -142,7 +142,7 @@ public class GaussianProcessLDPLMeanMulti extends GaussianProcessLDPLMean {
 
 	public double looErrorLDPLMultiPart(int k){
 		looUpdateLDPLMulti(k);
-		int ns = Y.length;
+
 		int ny = Y[0].length;
 		int count=0;
 		double sum = 0;;
@@ -268,7 +268,8 @@ public class GaussianProcessLDPLMeanMulti extends GaussianProcessLDPLMean {
 				int ns = X.length;
 				double aveLOOMSE = 0.0;
 				for(int k=0; k<ns; k++){
-					double looMSE = gpLDPLMulti.fit(X, Y).looErrorLDPLMultiPart(k);
+					gpLDPLMulti.fit(X, Y);
+					double looMSE = gpLDPLMulti.looErrorLDPLMultiPart(k);
 					aveLOOMSE += looMSE/ns;
 				}
 

@@ -176,7 +176,11 @@ public class GaussianProcess {
 				dY[i][j] = Y[i][j]-mX[i][j];
 			}
 		}
-
+		
+		if(optConstVar==1){
+			invKyDY = computeInvKyDY(invKy, dY);
+		}
+		
 		return this;
 	}
 
@@ -354,13 +358,6 @@ public class GaussianProcess {
 		return Kstar;
 	}
 
-	/*
-	private double[] computeKs_invKy(double[] Kstar, double[][] invKy){
-		return computeKs_invKy_slow(Kstar, invKy);
-	}
-	*/
-
-	//private double[] computeKs_invKy_slow(double[] Kstar, double[][] invKy){
 	private double[] computeKs_invKy(double[] Kstar, double[][] invKy){
 		int ns = Kstar.length;
 		double[] Ks_invKy = new double[ns];
@@ -573,6 +570,5 @@ public class GaussianProcess {
 
 		return sumLOOPredLL;
 	}
-
 
 }
