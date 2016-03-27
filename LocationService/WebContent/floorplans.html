@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<!----------------------------------------------------------------------------
+Copyright (c) 2014, 2015 IBM Corporation
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+------------------------------------------------------------------------------>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Floor Plans</title>
+<script type="text/javascript"
+	src="js/lib/jquery/jquery-1.11.2.min.js"></script>
+<link rel="stylesheet" type="text/css"
+	href="js/lib/jquery-ui-1.11.4/jquery-ui.min.css">
+<script type="text/javascript"
+	src="js/lib/jquery-ui-1.11.4/jquery-ui.min.js"></script>
+<link rel="stylesheet" type="text/css"
+	href="js/lib/DataTables-1.10.6/css/jquery.dataTables.css">
+<script type="text/javascript"
+	src="js/lib/DataTables-1.10.6/js/jquery.dataTables.min.js"></script>
+<link rel="stylesheet" type="text/css"
+	href="js/lib/OpenLayers-2.13.1/theme/default/style.css">
+<script type="text/javascript"
+	src="js/lib/OpenLayers-2.13.1/OpenLayers.js"></script>
+<style type="text/css">
+.ui-button-text-only .ui-button-text {
+	padding: 2px 6px;
+	font-size: 16px;
+	font-weight: normal;
+}
+</style>
+<script type="text/javascript" src="/LocationService/js/datautils.js"></script>
+<script type="text/javascript" src="/LocationService/js/mapview.js"></script>
+<script>
+
+var floorplanDataType = "floorplans";
+var mapView;
+
+$(document).ready(function() {
+	refresh();
+	mapView = new MapViewer("mapdiv", {
+		'mapProjection' : new OpenLayers.Projection('EPSG:3857'),
+		'externalProjection' : new OpenLayers.Projection('PROJ:EXTERNAL'),
+		'click' : function(x, y) {
+			if ($('#origin_x').is(':focus') || $('#origin_y').is(':focus')) {
+				var ppm_x = parseFloat($("#ppm_x").val());
+				var ppm_y = parseFloat($("#ppm_y").val());
+				var origin_x = parseFloat($("#origin_x").val());
+				var origin_y = parseFloat($("#origin_y").val());
+				$('#origin_x').val(parseInt(x*ppm_x+origin_x));
+				$('#origin_y').val(parseInt(y*ppm_y+origin_y));
+				var mapInfo = {
+					origin: {x: parseInt(x*ppm_x+origin_x), y:parseInt(y*ppm_x+origin_y)},
+					ppm: {x:ppm_x, y:ppm_y}
+				};
+				setProjections(mapInfo);
+				mapView.drawGrid(mapInfo.origin, mapInfo.ppm);
+			}
+			if ($('#ppm_x').is(':focus') || $('#ppm_y').is(':focus')) {
+				var ppm_x = parseFloat($("#ppm_x").val());
+				var ppm_y = parseFloat($("#ppm_y").val());
+				var origin_x = parseFloat($("#origin_x").val());
+				var origin_y = parseFloat($("#origin_y").val());
+				if (!window._pclick) {
+					window._pclick = {x:x,y:y};
+				} else {
+					var dist = Math.sqrt(Math.pow(ppm_x*(_pclick.x - x),2)+Math.pow(ppm_y*(_pclick.y-y),2));
+					var actual = prompt("How long between distance");
+					if (actual) {
+						var ppm_x = parseInt(dist / actual * 100)/100;
+						var ppm_y = parseInt(dist / actual * 100)/100;
+						$("#ppm_x").val(ppm_x);
+						$("#ppm_y").val(ppm_y);
+						var mapInfo = {
+								origin: {x: origin_x, y:origin_y},
+								ppm: {x:ppm_x, y:ppm_y}
+							};
+							setProjections(mapInfo);
+							mapView.drawGrid(mapInfo.origin, mapInfo.ppm);
+					}
+					_pclick = null;	
+				}				
+			}
+		},
+	});
+});
+
+
+function refresh() {
+	refreshSampleTable();
+}
+
+function refreshSampleTable() {
+	$('#data_table').empty();
+	var query = {};
+
+	dataUtil.getData({
+		'type' : floorplanDataType,
+		'data' : {
+			'query' : JSON.stringify(query),
+			'sort' : JSON.stringify({
+				'_id' : -1
+			})
+		},
+		'success' : function(data) {
+			console.log(data);
+			createFloorplanTable(data).appendTo('#data_table').dataTable();
+		},
+		'error' : function(xhr, text, error) {
+			$('#message').text(error || text);
+		}
+	});
+}
+
+function createFloorplan(form) {
+	var $form = $(form);
+	
+	var metadata = {
+		'name' : $form.find('#name').val() || '',
+		'comment' : $form.find('#comment').val() || ''
+	};
+	var id = $form.find('#floorplan_id').val();
+	var group = $form.find('#group').val();
+	var floor = $form.find('#floor').val();
+	var origin_x = parseFloat($form.find('#origin_x').val());
+	var origin_y = parseFloat($form.find('#origin_y').val());
+	var ppm_x = parseFloat($form.find('#ppm_x').val());
+	var ppm_y = parseFloat($form.find('#ppm_y').val());
+	if (isNaN(origin_x) || isNaN(origin_y) || isNaN(ppm_x) || isNaN(ppm_y) || isNaN(floor) || !group) {
+		$('#message').text('Invalid group, floor, origin x, origin y, ppm x or ppm y.');
+		return;
+	}
+	current.group = group;
+	current.floor = floor;
+	current.origin_x = origin_x;
+	current.origin_y = origin_y;
+	current.ppm_x = ppm_x;
+	current.ppm_y = ppm_y;
+	
+	if (id) {
+		var query = {
+			'_id' : {
+				'$oid' : id
+			}
+		}, update = {
+			'$set' : {
+				'_metadata.name' : metadata.name,
+				'_metadata.comment' : metadata.comment,
+				'group' : group,
+				'floor' : floor,
+				'origin_x' : origin_x,
+				'origin_y' : origin_y,
+				'ppm_x' : ppm_x,
+				'ppm_y' : ppm_y
+			}
+		};
+		dataUtil.postData({
+			'type' : floorplanDataType,
+			'data' : {
+				'action' : 'update',
+				'query' : JSON.stringify(query),
+				'update' : JSON.stringify(update)
+			},
+			'success' : function(data) {
+				console.log(data);
+				hideFloorplanForm();
+				refresh();
+			},
+			'error' : function(xhr, text, error) {
+				$('#message').text(error || text);
+			}
+		});
+		return;
+	}
+	
+	var file = $form.find("#file")[0];
+	if (file) {
+		var reader = new FileReader();
+		reader.onload = function() {
+			var img = new Image();
+			img.onload = function() {
+				var width = img.width;
+				var height = img.height;
+				var formData = new FormData(form);
+				dataUtil.postFormData({
+					'type' : "file",
+					'data' : formData,
+					'success' : function(data) {
+						console.log(["file save success", data]);
+						data = {
+							'group' : group,
+							'floor' : floor,
+							'origin_x' : origin_x,
+							'origin_y' : origin_y,
+							'width': width,
+							'height': height,
+							'ppm_x' : ppm_x,
+							'ppm_y' : ppm_y,
+							'filename' : data.filename
+						};
+						console.log(["send data", data]);
+						dataUtil.postData({
+							'type' : floorplanDataType,
+							'data' : {
+								data: JSON.stringify(data),
+								_metadata: JSON.stringify(metadata)
+								},
+							'success' : function(data) {
+								console.log(data._id);
+								hideFloorplanForm();
+								refresh();
+							},
+							'error' : function(xhr, text, error) {
+								$('#message').text(error || text);
+							}
+						});
+					},
+					'error' : function(xhr, text, error) {
+						$('#message').text(error || text);
+					}
+				});
+			}
+			img.src = reader.result;
+		}
+		reader.readAsDataURL(file.files[0]);
+				
+		return;
+	}
+}
+
+function createFloorplanTable(data) {
+	var table = $('<table>', {
+		'class' : 'display',
+		'cellpadding' : 0,
+		'cellspacing' : 0,
+		'border' : 0,
+		'data-order' : '[[ 0, "desc" ]]'
+	});
+	var head = createTableRow([ 'image', 'name', 'comment', 'group', 'floor', 'action'], '<th>');
+	$('<thead>').append(head).appendTo(table);
+	var tbody = $('<tbody>').appendTo(table);
+	$('<tfoot>').append(head.clone()).appendTo(table);
+	data.forEach(function(obj, i) {
+		var id = obj._id.$oid;
+		var info = obj.information || {};
+		var md = obj._metadata || {};
+
+		var actions = $('<span>', {
+			'css' : {
+				'white-space' : 'nowrap'
+			}
+		});
+
+		if (info.floor) {
+			actions.append(createButton('plot', function() {
+				mapView.clearMarkers();
+				var floorInfo = getFloorInfo(info.floor, info.floor_num);
+				if (floorInfo) {
+					scrollToMap();
+					mapView.loadFloor(floorInfo, {
+						'success' : function() {
+							mapView.addMarker({
+								'x' : info.absx,
+								'y' : info.absy,
+								'options' : {
+									'sampling' : obj
+								}
+							});
+						}
+					});
+				}
+			}));
+		}
+
+		var image = new Image();
+		image.src = 'data/file?id=' + obj.filename;
+		
+		actions.append(createButton('map', function() {
+			showMap(obj);
+		}), createButton('edit', function() {
+			showFloorplanForm(obj);
+		}), createButton('delete', function() {
+			deleteData(floorplanDataType, id, md.name);
+		}), createLink('details', 'data/' + floorplanDataType + '/' + id)
+		, createLink('image', 'data/file?id='+obj.filename));
+		
+		var img = createImage(image.src);
+		tbody.append(createTableRow([ img, md.name, md.comment, obj.group, obj.floor, actions ], '<td>'));
+	});
+	return table;
+}
+
+var buttons = {}, links = {}, images = {};
+
+function createButton(text, onclick) {
+	return (buttons[text] = buttons[text] || $('<button>', {
+		'text' : text
+	}).button()).clone().on('click', onclick);
+}
+
+function createImage(src) {
+	return (images[src] = images[src] || $('<img>', {
+		'src' : src,
+		'height': '100px'
+	}));
+}
+
+function createLink(text, href) {
+	return (links[text] = links[text] || $('<a>', {
+		'text' : text,
+		'target' : '_blank'
+	}).button()).clone().attr('href', href);
+}
+
+function createTableRow(array, tag) {
+	var row = $('<tr>');
+	array.forEach(function(col) {
+		row.append($(tag).append(col));
+	});
+	//		row.find('button,a').button();
+	return row;
+}
+
+function deleteData(type, id, name) {
+	if (confirm('Delete ' + (name || id) + '?')) {
+		dataUtil.deleteData({
+			'type' : type,
+			'id' : id,
+			'success' : function(data) {
+				console.log(data);
+				refresh();
+			},
+			'error' : function(xhr, text, error) {
+				$('#message').text(error || text);
+			}
+		});
+	}
+}
+
+function showFloorplanForm(obj, ref) {
+	$('.floorplan_hide_edit').hide();
+	
+	$('#floorplan_form .forCreate, #floorplan_form .forEdit').hide();
+	if (obj) {
+		$('#floorplan_form .forEdit').show();
+	} else {
+		$('#floorplan_form .forCreate').show();
+	}
+	//$('.sample_show_edit').show();
+	$('#floorplan_form').dialog({
+		'width' : 'auto',
+		'height' : 'auto',
+		'resizable' : false,
+		'close' : function() {
+			hideFloorplanForm();
+		}
+	});
+
+	console.log(obj);
+	if (obj) {
+		showMap(obj);
+	}
+	current = obj = obj || {};
+	
+	var md = obj._metadata || {};
+	var form = $('#floorplan_form form');
+	var info = obj || {};
+	form.find('#name').val(md.name || '');
+	form.find('#comment').val(md.comment || '');
+	form.find('#file').val('');
+	form.find('#floorplan_id').val((obj._id && obj._id.$oid) || '');
+	form.find('#group').val(obj.group || "");
+	form.find('#floor').val(obj.floor || 0);
+	form.find('#origin_x').val(obj.origin_x || 0);
+	form.find('#origin_y').val(obj.origin_y || 0);
+	form.find('#ppm_x').val(obj.ppm_x || 1);
+	form.find('#ppm_y').val(obj.ppm_y || 1);
+}
+
+function showMap(obj) {
+	var image = new Image();
+	image.src = 'data/file?id=' + obj.filename;
+	image.onload = function() {
+	
+		var mapInfo = {
+				imageURL:image.src,
+				width:image.width,
+				height:image.height,
+				origin: {x:obj.origin_x, y:obj.origin_y},
+				ppm: {x:obj.ppm_x, y:obj.ppm_y}					
+			};
+		mapView.show(mapInfo);
+		mapView.drawGrid(mapInfo.origin, mapInfo.ppm);
+		setProjections(mapInfo);		
+	};
+}
+
+function setProjections(mapInfo) {
+	OpenLayers.Projection.addTransform('EPSG:3857', 'PROJ:EXTERNAL', function(point) {
+		point.x = (point.x - mapInfo.origin.x) / mapInfo.ppm.x;
+		point.y = (point.y - mapInfo.origin.y) / mapInfo.ppm.y;			
+		return point;
+	});
+	OpenLayers.Projection.addTransform('PROJ:EXTERNAL', 'EPSG:3857', function(point) {
+		point.x = point.x * mapInfo.ppm.x + mapInfo.origin.x;
+		point.y = point.y * mapInfo.ppm.y + mapInfo.origin.y;
+		return point;
+	});
+}
+
+function hideFloorplanForm() {
+	if ($('#floorplan_form').is(':visible')) {
+		$('#floorplan_form').dialog('close');
+	}
+	$('.floorplan_hide_edit').show();
+	showMap(current);
+}
+
+</script>
+</head>
+<body>
+	<a href="sampling.html">Manage Samplings</a>
+	<div class="floorplan_hide_edit ref_hide_edit">
+		<h1 class="ui-widget-header">Floor Plans</h1>
+		<div style="margin-top: -10px; margin-bottom: 10px;">
+			<button id="floorplanAdd_button" onclick="showFloorplanForm()">Add
+				a floorplan</button>
+			<button id="reset_filter" onclick="resetFilter()">Reset
+				filter</button>
+		</div>
+		<div class="ui-widget-content" id="data_table"></div>
+	</div>
+	
+	<div id="floorplan_form" class="floorplan_show_edit" style="display: none"
+		title="Floor Plan">
+		<form onsubmit="createFloorplan(this); return false;"
+			onreset="hideFloorplanForm()">
+			<input type="hidden" id="floorplan_id" name="floorplan_id" value="" />
+			<p>
+				<label for="name">Name:</label><br /> <input id="name" name="name"
+					type="text" size="40" />
+			</p>
+			<p>
+				<label for="comment">Comment:</label><br />
+				<textarea id="comment" name="comment" cols="40" rows="5"></textarea>
+			</p>
+			<p class="forCreate">
+				<input id='file' name="file" type="file" />
+			</p>
+			<p class="forCreate forEdit">
+				<label for="group">Group Name:</label><input id="group"
+					name="group" type="text" />
+			</p>
+			<p class="forCreate forEdit">
+				<label for="floor">Floor:</label><input id="floor"
+					name="floor" type="number" />
+			</p>
+			<p class="forCreate forEdit">
+				<label for="origin_x">Origin X:</label> <input id="origin_x"
+					name="origin_x" type="text" /><br /> 
+				<label for="origin_y">Origin Y:</label> <input id="origin_y"
+					name="origin_y" type="text" />
+			</p>
+			<p class="forCreate forEdit">
+				<label for="ppm_x">PPM X:</label><input id="ppm_x"
+					name="ppm_x" type="text" /><br /> 
+				<label for="ppm_y">PPM Y:</label><input id="ppm_y"
+					name="ppm_y" type="text" />
+			</p>
+			<p>
+				<input type="submit" /> <input type="reset" value="Cancel" />
+			</p>
+		</form>
+	</div>
+	<div class="">
+		<h1 class="ui-widget-header">Floor Plan</h1>
+		<div id="menu"></div>
+		<div id="mapdiv"
+			style="width: 1100px; height: 750px; border: 1px solid black; position: relative;"></div>
+	</div>
+</body>
+</html>

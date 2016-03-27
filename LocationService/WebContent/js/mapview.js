@@ -322,9 +322,20 @@ function MapViewer(mapdiv, options) {
 					}
 				}
 			});
-		}
-		var smap = new OpenLayers.StyleMap(drawingStyle);
+			console.log([intent, drawingStyle[intent]]);
 
+		}
+				
+		/*
+		var drawLayer = new OpenLayers.Layer.Vector(options.title, {
+			'styleMap' : new OpenLayers.StyleMap(drawingStyle)
+		});
+		*/
+		
+		var smap = new OpenLayers.StyleMap(drawingStyle);
+		// if use addUniqueValueRules there is a small problem with drawing
+		// http://gis.stackexchange.com/questions/59312/openlayers-adduniquevaluerules-default-style-not-displaying
+		// need to drawLayer.redraw() if attribute is changed after drawing
 		smap.addUniqueValueRules("default", "type", {
 			'beacon' : {
 				'strokeColor' : "blue",
@@ -339,13 +350,20 @@ function MapViewer(mapdiv, options) {
 			'grid' : {
 				'strokeColor' : "gray",
 				'fillColor' : "lightgray"
+			},
+			'default' : {
+				'strokeColor' : "black"
 			}
 		});
-
-
+		smap.styles['default'].rules.push(new OpenLayers.Rule({
+		    elseFilter: true,
+		    symbolizer: smap.styles['default'].defaultStyle
+		}));
 		var drawLayer = new OpenLayers.Layer.Vector(options.title, {
 			'styleMap' : smap
 		});
+		
+		
 		map.addLayers([ drawLayer ]);
 
 		var drawingFeatures = options.drawingFeatures || {
@@ -395,6 +413,11 @@ function MapViewer(mapdiv, options) {
 			}
 		};
 		var minor = 1;
+		
+		drawLayer.events.register('sketchcomplete', this, function(f) {
+			console.log(f);
+		});
+		
 		drawingFeatures.beacon.control.events.register('featureadded', this, function(e) {
 			e.feature.attributes.type = "beacon";
 			e.feature.attributes.uuid = "00000000-0000-0000-0000-000000000000";
@@ -403,18 +426,21 @@ function MapViewer(mapdiv, options) {
 			e.feature.attributes.power = -12;
 			e.feature.attributes.interval = 100;
 			e.feature.attributes.memo = "";
+			drawLayer.redraw();
 		});
 		drawingFeatures.wall.control.events.register('featureadded', this, function(e) {
 			e.feature.attributes.type = "wall";
 			e.feature.attributes.height = 3.0;
 			e.feature.attributes.decay = -10;
 			e.feature.attributes.memo = "";
+			drawLayer.redraw();
 		});
 		drawingFeatures.walk.control.events.register('featureadded', this, function(e) {
 			e.feature.attributes.type = "walk";
 			e.feature.attributes.height = 1.0;
 			e.feature.attributes.repeat = 1;
 			e.feature.attributes.memo = "";
+			drawLayer.redraw();
 		});
 		drawingFeatures.grid.control.events.register('featureadded', this, function(e) {
 			e.feature.attributes.type = "grid";
@@ -422,6 +448,7 @@ function MapViewer(mapdiv, options) {
 			e.feature.attributes.interval = 1.0;
 			e.feature.attributes.repeat = 10;
 			e.feature.attributes.memo = "";
+			drawLayer.redraw();
 		});
 
 		drawingFeatures.del.control.events.register('featurehighlighted', this, function(e) {
