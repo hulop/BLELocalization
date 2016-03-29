@@ -44,14 +44,16 @@ THE SOFTWARE.
 </style>
 <script type="text/javascript" src="/LocationService/js/datautils.js"></script>
 <script type="text/javascript" src="/LocationService/js/mapview.js"></script>
+<script type="text/javascript" src="/LocationService/js/floorplan_editor.js"></script>
 <script>
 
 var floorplanDataType = "floorplans";
-var mapView;
+var mapView, selectedFloorplan;
 
 $(document).ready(function() {
 	refresh();
 	mapView = new MapViewer("mapdiv", {
+		'editor': FloorplanEditor,
 		'mapProjection' : new OpenLayers.Projection('EPSG:3857'),
 		'externalProjection' : new OpenLayers.Projection('PROJ:EXTERNAL'),
 		'click' : function(x, y) {
@@ -134,7 +136,7 @@ function createFloorplan(form) {
 	};
 	var id = $form.find('#floorplan_id').val();
 	var group = $form.find('#group').val();
-	var floor = $form.find('#floor').val();
+	var floor = parseFloat($form.find('#floor').val());
 	var origin_x = parseFloat($form.find('#origin_x').val());
 	var origin_y = parseFloat($form.find('#origin_y').val());
 	var ppm_x = parseFloat($form.find('#ppm_x').val());
@@ -143,12 +145,12 @@ function createFloorplan(form) {
 		$('#message').text('Invalid group, floor, origin x, origin y, ppm x or ppm y.');
 		return;
 	}
-	current.group = group;
-	current.floor = floor;
-	current.origin_x = origin_x;
-	current.origin_y = origin_y;
-	current.ppm_x = ppm_x;
-	current.ppm_y = ppm_y;
+	selectedFloorplan.group = group;
+	selectedFloorplan.floor = floor;
+	selectedFloorplan.origin_x = origin_x;
+	selectedFloorplan.origin_y = origin_y;
+	selectedFloorplan.ppm_x = ppm_x;
+	selectedFloorplan.ppm_y = ppm_y;
 	
 	if (id) {
 		var query = {
@@ -373,7 +375,7 @@ function showFloorplanForm(obj, ref) {
 	if (obj) {
 		showMap(obj);
 	}
-	current = obj = obj || {};
+	selectedFloorplan = obj = obj || {};
 	
 	var md = obj._metadata || {};
 	var form = $('#floorplan_form form');
@@ -390,6 +392,7 @@ function showFloorplanForm(obj, ref) {
 	form.find('#ppm_y').val(obj.ppm_y || 1);
 }
 
+
 function showMap(obj) {
 	var image = new Image();
 	image.src = 'data/file?id=' + obj.filename;
@@ -404,7 +407,9 @@ function showMap(obj) {
 			};
 		mapView.show(mapInfo);
 		mapView.drawGrid(mapInfo.origin, mapInfo.ppm);
-		setProjections(mapInfo);		
+		setProjections(mapInfo);
+		
+		mapView.getEditor().showBeaconsInFloorplan(obj);
 	};
 }
 
@@ -426,7 +431,9 @@ function hideFloorplanForm() {
 		$('#floorplan_form').dialog('close');
 	}
 	$('.floorplan_hide_edit').show();
-	showMap(current);
+	if (selectedFloorplan) {
+		showMap(selectedFloorplan);
+	}
 }
 
 </script>
@@ -485,6 +492,7 @@ function hideFloorplanForm() {
 			</p>
 		</form>
 	</div>
+	
 	<div class="">
 		<h1 class="ui-widget-header">Floor Plan</h1>
 		<div id="menu"></div>

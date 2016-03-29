@@ -26,6 +26,7 @@ THE SOFTWARE.
 <link rel="stylesheet" type="text/css"href="js/lib/OpenLayers-2.13.1/theme/default/style.css">
 <script type="text/javascript"src="js/lib/OpenLayers-2.13.1/OpenLayers.js"></script>
 <script type="text/javascript" src="js/mapview.js"></script>
+<script type="text/javascript" src="js/env_editor.js"></script>
 <script type="text/javascript">
 	$(document).ready(function() {
 		mapView = (function() {
@@ -33,6 +34,7 @@ THE SOFTWARE.
 			var options = {};
 			
 			var viewer = new MapViewer("mapdiv", {
+				'editor': EnvEditor,
 				'click' : true,
 				'enableEdit' : true,
 				'mapProjection' : new OpenLayers.Projection('EPSG:3857'),
