@@ -43,6 +43,9 @@ function FloorplanEditor(map, options) {
 						var minor = (feature.attributes.minor == undefined) ? "" : feature.attributes.minor;
 						return major + "-" + minor;
 					}
+					if (feature.attributes.type == "accessibility") {
+						return "A";
+					}
 					return feature.attributes.label || '';
 				}
 			}
@@ -85,10 +88,14 @@ function FloorplanEditor(map, options) {
 			'control' : new OpenLayers.Control.DrawFeature(drawLayer, OpenLayers.Handler.Point)
 		},
 		'move' : {
-			'label' : 'Move',
-			'control' : new OpenLayers.Control.DragFeature(drawLayer, {
+			'label' : 'Edit',
+			'control' : new OpenLayers.Control.ModifyFeature(drawLayer, {
 				'clickout' : true
 			})
+		},
+		'area' : {
+			'label' : 'Area',
+			'control' : new OpenLayers.Control.DrawFeature(drawLayer, OpenLayers.Handler.Polygon)
 		}
 	};
 	var minor = 1;
@@ -109,7 +116,8 @@ function FloorplanEditor(map, options) {
 	drawingFeatures.select.control.events.register('featurehighlighted', this, function(e) {
 		if (!boxSelect) {
 			selected = [ e.feature ];
-			showBeaconForm(selected);
+			showForm(selected);
+			//showBeaconForm(selected);
 		} else {
 			selected.push(e.feature);
 		}
@@ -120,7 +128,8 @@ function FloorplanEditor(map, options) {
 	});
 	drawingFeatures.select.control.events.register('boxselectionend', this, function(e) {
 		boxSelect = false;
-		showBeaconForm(selected);
+		//showBeaconForm(selected);
+		showForm(selected);
 	});
 
 	var drawingBar = $('<div>');
@@ -177,6 +186,14 @@ function FloorplanEditor(map, options) {
 	}).button()));
 	
 	drawingBar.append(' | ');
+	
+	drawingBar.append("Import GeoJSON", $("<input/>", {
+		"type": "file",
+		"id":"importFile",
+		"change":importDrawFeatures
+	}));
+	
+	drawingBar.append(' | ');
 
 	drawingBar.append($('<form/>', {
 		'id' : 'exportFormCSV',
@@ -203,6 +220,14 @@ function FloorplanEditor(map, options) {
 	}).button()));
 
 	drawingBar.append(' | ', $('<button>', {
+		'text' : 'Clear',
+		'click' : function() {
+			if (confirm("Are you sure to delete all?")) {
+				drawLayer.removeAllFeatures();
+			}
+		}
+	}).button());
+	drawingBar.append(' | ', $('<button>', {
 		'text' : 'Save',
 		'click' : function() {
 			saveBeacons();
@@ -211,14 +236,17 @@ function FloorplanEditor(map, options) {
 	activate('navigation');
 
 	function showBeaconsInFloorplan(floorplan) {
+		drawLayer.removeAllFeatures();
 		editor.targetFloorplan = floorplan;
 		if (!floorplan || !floorplan.beacons) {
 			return;
 		}
-		drawLayer.removeAllFeatures();
 		var geojson_format = new OpenLayers.Format.GeoJSON({
 			'internalProjection' : mapProjection,
 			'externalProjection' : editorProjection
+		});
+		floorplan.beacons.features = floorplan.beacons.features.filter(function(a) {
+			return a.geometry.type != "Point" || a.properties.type; 
 		});
 		var json = JSON.stringify(floorplan.beacons);
 		drawLayer.addFeatures(geojson_format.read(json));
@@ -244,7 +272,77 @@ function FloorplanEditor(map, options) {
 		}
 	}
 
-	var $form;
+	var $form, $aform;
+	
+	function showForm(features) {
+		if (!features || features.length == 0) {
+			return;
+		}
+		var type = null;
+		features.forEach(function(f){
+			if (type == null) {
+				type = f.attributes.type;
+			} else {
+				if (type != f.attributes.type) {
+					type = "invalid";
+				}
+			}
+		})
+		
+		if (type == "beacon") {
+			showBeaconForm(features);
+		}
+		if (type == "accessibility") {
+			if (features.length == 1) {
+				showAccForm(features[0]);
+			} else {
+				alert("Please select one accessibility feature");
+			}			
+		}
+	}
+	
+	function showAccForm(feature) {
+		if (!feature) {
+			return;
+		}
+
+		if (!$aform) {
+			$aform = $("<div>");
+		} else {
+			$aform.empty();
+		}
+			function createInput(label, id, size, options) {
+				return $("<span>").append($("<label>", {
+					'for' : id
+				}).text(label)).append("<br>").append($("<input>", $.extend(options, {
+					id : id
+				})).attr("size", size)).append("<br>");
+			}
+			var $p = $("<p>").appendTo($aform);
+			for(var k in feature.attributes.params) {
+				$p.append(createInput(k, k, 40, {
+					type : "text"}));
+			}
+		
+		for(var k in feature.attributes.params) {
+			$aform.find("#"+k).val(feature.attributes.params[k]);
+		}
+		
+			
+		$aform.selected = [feature];
+
+		$aform.dialog({
+			'width' : 'auto',
+			'height' : 'auto',
+			'resizable' : false,
+			'modal' : true,
+			'close' : function() {
+				$aform.dialog("close");
+				drawingFeatures.select.control.unselectAll();
+				drawLayer.redraw();
+			}
+		});
+	}
 
 	function showBeaconForm(features) {
 		if (!features || features.length == 0) {
@@ -340,8 +438,8 @@ function FloorplanEditor(map, options) {
 			'internalProjection' : mapProjection,
 			'externalProjection' : editorProjection
 		});
-		var beacons = JSON.parse(geojson_format.write(drawLayer.features));
-
+		var beacons = JSON.parse(geojson_format.write(drawLayer.features));		
+		
 		var query = {
 			'_id' : editor.targetFloorplan._id
 		}, update = {
@@ -366,6 +464,20 @@ function FloorplanEditor(map, options) {
 
 	}
 
+	function importDrawFeatures() {
+		fr = new FileReader();
+		fr.onload = function(e) {
+			var geojson_format = new OpenLayers.Format.GeoJSON({
+				'internalProjection' : mapProjection,
+				'externalProjection' : editorProjection
+			});
+			var fs = geojson_format.read(fr.result);
+			console.log(fs)
+			drawLayer.addFeatures(fs);
+		};
+		fr.readAsText($("#importFile")[0].files[0]);		
+	}
+	
 	function exportDrawFeatures(pretty) {
 		activate(null);
 		var geojson_format = new OpenLayers.Format.GeoJSON({

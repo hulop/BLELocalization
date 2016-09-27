@@ -41,17 +41,38 @@ THE SOFTWARE.
 	font-size: 16px;
 	font-weight: normal;
 }
+.fileUpload {
+	position: relative;
+	overflow: hidden;
+	margin: 10px;
+}
+.fileUpload input.upload {
+	position: absolute;
+	top: 0;
+	right: 0;
+	margin: 0;
+	padding: 0;
+	font-size: 20px;
+	cursor: pointer;
+	opacity: 0;
+	filter: alpha(opacity=0);
+}
 </style>
 <script type="text/javascript" src="/LocationService/js/datautils.js"></script>
 <script type="text/javascript" src="/LocationService/js/mapview.js"></script>
 <script type="text/javascript" src="./js/defaultMap.js"></script>
 
 <script type="text/javascript">
+	function normalize(s) {
+		return Math.round(parseFloat(s)*100)/100;
+	}
+
 	var mapView = null, floorList = [], filterRefid;
 	var sampleref;
 
 	$(document).ready(function() {
 		$('button').button();
+		$('.btn').button();
 		var MV = DefaultMapView;
 		mapView = new MV('mapdiv', {
 			'baseURL' : "./",
@@ -59,6 +80,8 @@ THE SOFTWARE.
 				refreshFloorList();
 			},
 			'click' : function(x, y) {
+				x = parseInt(x*100)/100;
+				y = parseInt(y*100)/100;
 				if ($('#ref_x').is(':visible')) {
 					$('#ref_x').val(x);
 					$('#ref_y').val(y);
@@ -177,6 +200,7 @@ THE SOFTWARE.
 					'_metadata' : 1,
 					'information' : 1
 				}),
+				'limit' : 100,
 				'sort' : JSON.stringify({
 					'_id' : -1
 				})
@@ -243,8 +267,8 @@ THE SOFTWARE.
 
 			var tags = (info.tags || []).join(', ');
 			var created_at = md.created_at ? new Date(md.created_at.$date).toLocaleString() : '';
-			tbody.append(createTableRow([ created_at, md.name, md.comment, tags, info.site_id, info.floor, info.floor_num, info.x, info.y, info.z, info.absx,
-					info.absy, actions ], '<td>'));
+			tbody.append(createTableRow([ created_at, md.name, md.comment, tags, info.site_id, info.floor, info.floor_num, normalize(info.x), normalize(info.y), normalize(info.z), normalize(info.absx),
+					normalize(info.absy), actions ], '<td>'));
 		});
 		return table;
 	}
@@ -518,7 +542,11 @@ THE SOFTWARE.
 							}
 						});
 					}
-				}));
+				}),
+				createButton('wall', function() {
+					drawWallImage(obj);
+				})
+				);
 			}
 
 			actions.append(createButton('edit', function() {
@@ -530,13 +558,76 @@ THE SOFTWARE.
 			sample_actions.append(createButton('filter', function() {
 				filterRefid = obj._id;
 				refreshSampleTable();
-			}), $('<input type="checkbox" name="export_'+id+'">').prop('refid', obj._id).prop('refname', md.name));
+			}), createButton('delete', function() {
+				deleteSamplesForRefid(obj._id);
+				refreshSampleTable();
+			}),	$('<input type="checkbox" name="export_'+id+'">').prop('refid', obj._id).prop('refname', md.name));
 
 			var created_at = md.created_at ? new Date(md.created_at.$date).toLocaleString() : '';
 			tbody.append(createTableRow([ created_at, md.name, md.comment, obj.floor, obj.floor_num, obj.x, obj.y, obj.rotate, sample_actions, actions ],
 					'<td>'));
 		});
 		return table
+	}
+	
+	function drawWallImage(obj) {
+		var floorInfo = getFloorInfo(obj.floor, obj.floor_num);
+		console.log([obj, floorInfo]);
+		var canvas = $("<canvas>").appendTo(document.body)[0];
+		canvas.width = floorInfo.width;
+		canvas.height = floorInfo.height;
+		var ctx = canvas.getContext("2d");
+		var img = new Image();
+		img.src = floorInfo.imageURL;
+		img.onload=function() {
+			//ctx.drawImage(img,0,0);
+			ctx.fillStyle = "rgb(0,0,0)";
+			ctx.fillRect(0, 0, canvas.width, canvas.height);
+			
+			refid = obj._id;
+			dataUtil.getData({
+				'type' : sampleDataType,
+				'data' : {
+					'query' : JSON.stringify({
+						'information.refid' : refid
+					}),
+					'keys' : JSON.stringify({
+						'_metadata' : 1,
+						'information' : 1
+					})
+				},
+				'success' : function(data) {
+					console.log(data);
+					var markers = [];
+					data.forEach(function(s) {
+						var ppmx = floorInfo.ppm_x;
+						var ppmy = -floorInfo.ppm_y;
+						var ox = floorInfo.origin_x;
+						var oy = floorInfo.height - floorInfo.origin_y;
+						
+						var x = s.information.absx;
+						var y = s.information.absy;
+						
+						var nx = ox + x*ppmx;
+						var ny = oy + y*ppmy;
+						
+						//console.log([ppmx, ppmy, ox, oy, x, y, nx, ny]);
+						
+						ctx.fillStyle = "rgb(255,255,255)";
+						ctx.beginPath();
+						ctx.arc(nx, ny, ppmx, 0, 2*Math.PI);
+						ctx.fill()
+					});
+					mapView.addMarkers(markers);
+				},
+				'error' : function(xhr, text, error) {
+					$('#message').text(error || text);
+				}
+			});
+
+		}
+		
+		
 	}
 
 	function showRefForm(obj) {
@@ -621,6 +712,28 @@ THE SOFTWARE.
 		return row;
 	}
 
+	function deleteSamplesForRefid(oid) {
+		if (confirm('Delete ?')) {
+			var query = JSON.stringify({
+				"information.refid": {
+					"$in": [oid]
+				}
+			});
+			
+			$.ajax('data?type=samplings&query=' + encodeURIComponent(query), {
+				'method' : 'DELETE',
+				'dataType' : 'json',
+				'success': function(data) {
+					console.log(["DELETE", data])
+					refresh();
+				},
+				'error': function(xhr, text, error) {
+					$('#message').text(error || text);
+				}
+			})	
+		}
+	}
+	
 	function deleteData(type, id, name) {
 		if (confirm('Delete ' + (name || id) + '?')) {
 			dataUtil.deleteData({
@@ -647,6 +760,7 @@ THE SOFTWARE.
 		floorList = mapView.getFloorList();
 		console.log(floorList);
 		$('#ref_floor').empty();
+		$('#ref_floor2').empty();
 		if (floorList.length == 0) {
 			return;
 		}
@@ -656,8 +770,14 @@ THE SOFTWARE.
 				//				'selected' : i == 0,
 				'value' : i
 			}));
+			$('#ref_floor2').append($('<option>', {
+				'text' : floor.label,
+				//				'selected' : i == 0,
+				'value' : i
+			}));
 		});
 		$('#ref_floor').val(0).change();
+		$('#ref_floor2').val(0).change();
 	}
 
 	function getFloorInfo(floor, floor_num) {
@@ -716,9 +836,41 @@ THE SOFTWARE.
 				},
 				'href' : 'data/' + sampleDataType + '?query=' + encodeURIComponent(query) + '&sort=' + encodeURIComponent(sort)
 			});
+			console.log(query);
 			if (link.prop('download') !== undefined) { // feature detection
 				// Browsers that support HTML5 download attribute
 				link.attr('download', names.join('-') + '.json');
+				(link.appendTo('body'))[0].click();
+				link.remove();
+			}
+		} else {
+			alert('No reference points selected');
+		}
+	}
+	function exportCSVSamplings() {
+		var names = [], refids = [];
+		$('#ref_data_table input[type=checkbox]:checked').each(function(i, checkbox) {
+			names.push(checkbox.refname);
+			refids.push(checkbox.refid);
+		});
+
+		if (refids.length > 0) {
+			var query = JSON.stringify({
+				'information.refid' : {
+					'$in' : refids
+				}
+			}), sort = JSON.stringify({
+				'information.refid' : 1
+			});
+			var link = $('<a>', {
+				'css' : {
+					'visibility' : 'hidden'
+				},
+				'href' : 'data/' + sampleDataType + '?query=' + encodeURIComponent(query) + '&sort=' + encodeURIComponent(sort) + '&format=csv'
+			});
+			if (link.prop('download') !== undefined) { // feature detection
+				// Browsers that support HTML5 download attribute
+				link.attr('download', names.join('-') + '.csv');
 				(link.appendTo('body'))[0].click();
 				link.remove();
 			}
@@ -771,6 +923,84 @@ THE SOFTWARE.
 		}
 	
 }
+	function importLidarSamplings() {
+		var file = $("#import_lidar_file")[0].files[0];
+		if (!file) {
+			return;
+		}
+		
+		var floorInfo = floorList[$("#ref_floor2").val()].floorInfo;
+		var data = {
+			'filename': floorInfo.filename || "",
+			'floor' : floorInfo.floor,
+			'floor_num' : floorInfo.floor_num,
+			'x' : 0,
+			'y' : 0,
+			'rotate' : 0
+		};
+		var metadata = {
+			'name' : floorInfo._metadata.name+"_LiDAR",
+			'comment' : file.name
+		};
+		
+		var fr = new FileReader();
+		fr.onload = function() {			
+			function checkImport(d) {
+				if ((d.data || d.accessibility) && d.information) {
+					return d;
+				}
+				return false;
+			}
+			var input = JSON.parse(fr.result);
+			console.log(input);
+			if (!input.length || input.length == 0) {
+				return;
+			}
+			input = input.filter(function(i) {
+				return checkImport(i);
+			});	
+			if (input.length == 0) {
+				return;
+			}
+
+			dataUtil.postData({
+				'type' : refDataType,
+				'data' : {
+					'data' : JSON.stringify(data),
+					'_metadata' : JSON.stringify(metadata)
+				},
+				'success' : function(data) {
+					console.log(data._id);
+					//todo					
+					input.forEach(function(i) {
+						var meta = {
+							name: floorInfo._metadata.name+"_LiDAR",
+							comment: ""
+						}
+						i.information.refid = data._id;
+						dataUtil.postData({
+							'type' : sampleDataType,
+							'data' : {
+								'data' : JSON.stringify(i),
+								'_metadata' : JSON.stringify(meta)
+							},
+							'success' : function(data) {
+								console.log(data._id);
+							}
+						});					
+						
+					});
+					refresh();
+				},
+				'error' : function(xhr, text, error) {
+					$('#message').text(error || text);
+				}
+			});		
+		}
+		fr.readAsText(file);
+		
+		$("#import_lidar_file").val(null);		
+	}
 </script>
 </head>
 <body>
@@ -821,12 +1051,21 @@ THE SOFTWARE.
 				reference point</button>
 			<button id="export_button" onclick="exportSamplings()">Export
 				selected samples</button>
+			<button id="export_csv_button" onclick="exportCSVSamplings()">Export
+				selected samples (CSV)</button>
 			<button id="plot_button" onclick="plotSamplings()">Plot
 				selected samples</button>
 			<button id="export_all_button" onclick="exportAllSamplings()">Export
 				all samples</button>
 			<button id="export_all_csv_button" onclick="exportAllSamplingsCSV()">Export
-				all samples (CSV)</button>
+				all samples (CSV)</button><br>
+				
+			<label for="ref_floor2">Floor:</label><select id="ref_floor2"
+					name="ref_floor"></select>
+			<div class="fileUpload btn btn-primary">
+    			<span>Import LiDAR Sampling</span>
+    			<input type="file" id="import_lidar_file" class="upload" onchange="importLidarSamplings()"/>
+			</div>
 		</div>
 		<div class="ui-widget-content" id="ref_data_table"></div>
 	</div>

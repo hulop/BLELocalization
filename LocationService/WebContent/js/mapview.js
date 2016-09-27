@@ -277,6 +277,7 @@ function MapViewer(mapdiv, options) {
 	}
 
 	function drawGrid(start, step) {
+		/*
 		gridLayer.removeAllFeatures();
 		var features = [];
 		function addLine(x1, y1, x2, y2, origin) {
@@ -291,6 +292,27 @@ function MapViewer(mapdiv, options) {
 		}
 		for ( var s = start.y % step.y, i = 0, y; Math.floor(y = s + i * step.y) <= mapInfo.height; i++) {
 			addLine(0, y, mapInfo.width, y, Math.floor(y - start.y) == 0);
+		}
+		gridLayer.addFeatures(features);
+		 */
+		gridLayer.removeAllFeatures();
+		var features = [];
+		
+		function addLine(x1, y1, x2, y2, origin) {
+			var p1 = new OpenLayers.Geometry.Point(x1, y1);
+			var p2 = new OpenLayers.Geometry.Point(x2, y2);
+			p1 = p1.transform(externalProjection, mapProjection);
+			p2 = p2.transform(externalProjection, mapProjection);
+			//console.log([x1, y1, x2, y2, p1.x, p1.y, p2.x, p2.y, p1, p2]);
+			features.push(new OpenLayers.Feature.Vector(new OpenLayers.Geometry.LineString([ p1, p2 ]), {
+				'type' : origin ? 'origin' : 'normal'
+			}));
+		}
+		for ( var s = start.x, i = -Math.round(mapInfo.width/step.x), x; (x = i) <= mapInfo.width/step.x; i++) {
+			addLine(x, -mapInfo.height/step.y*2, x, mapInfo.height/step.y*2, i == 0);
+		}
+		for ( var s = start.y, i = -Math.round(mapInfo.height/step.y), y; (y = i) <= mapInfo.height/step.y; i++) {
+			addLine(-mapInfo.width/step.x*2, y, mapInfo.width/step.x*2, y, i == 0);
 		}
 		gridLayer.addFeatures(features);
 	}

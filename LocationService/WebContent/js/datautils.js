@@ -76,7 +76,7 @@ var dataUtil = (function() {
 
 		'postFormData' : function(options) {
 			// note: data/type url rewrite does not work with multipart
-			$.ajax('data?type=' + options.type, {
+			$.ajax('data?type=' + options.type + (options.id?"&id="+options.id:"") , {
 				'method' : 'POST',
 				'contentType' : false,
 				'processData' : false,

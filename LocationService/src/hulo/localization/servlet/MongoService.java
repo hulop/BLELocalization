@@ -5,8 +5,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.zip.GZIPOutputStream;
 
 import javax.servlet.http.HttpServletRequest;
@@ -27,7 +29,9 @@ import hulo.localization.Sample;
 import hulo.localization.data.DataUtils;
 
 public class MongoService {
-	private static final String MONGO_HOST = "localhost:27017", DB_NAME = "locationservicedb";
+	private static final String MONGO_HOST = "localhost:27017";
+	private static String DB_NAME = "locationservicedbisl";
+	private static final String DB_NAME_PREFIX = "locationservicedb";
 	private static MongoService sDS;
 
 	private DB mDB = null;
@@ -48,6 +52,35 @@ public class MongoService {
 		} catch (UnknownHostException e) {
 			e.printStackTrace();
 		}
+	}
+	
+	public boolean setDB(String name) {
+		if (name.startsWith(DB_NAME_PREFIX)) {
+			DB_NAME = name;
+			System.out.println("old sDS = "+sDS);
+			sDS = new MongoService(MONGO_HOST, DB_NAME);
+			System.out.println("new sDS = "+sDS);
+			return true;
+		}
+		return false;
+	}
+	
+	public List<String> getDBNames() {
+		List<String> dbNames = new ArrayList<String>();
+		try {
+			dbNames = new MongoClient(MONGO_HOST).getDatabaseNames();
+		} catch(UnknownHostException e){ 
+			e.printStackTrace();
+		}
+		
+		dbNames.removeIf(new Predicate<String>() {
+			@Override
+			public boolean test(String t) {
+				return !t.startsWith(DB_NAME_PREFIX);
+			}
+		});
+		
+		return dbNames;
 	}
 
 	private Set<String> getCollectionNames() {
@@ -263,4 +296,5 @@ public class MongoService {
 			}
 		}
 	}
+
 }

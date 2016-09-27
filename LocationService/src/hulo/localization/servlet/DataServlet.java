@@ -7,6 +7,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.List;
@@ -130,6 +131,15 @@ public class DataServlet extends HttpServlet {
 	 *      Get resource
 	 */
 	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+
+		if (mDS != MongoService.getInstance()) {
+			System.out.println("MongoService db name is changed");
+			mDS = MongoService.getInstance();
+			mCollRef = mDS.getCollection("refpoints");
+			mCollSamp = mDS.getCollection("samplings");
+			mCollMap = mDS.getCollection("maps");
+		}
+		
 		String type = request.getParameter("type");
 		String id = request.getParameter("id");
 		System.out.println("doGet: type=" + type + " id=" + id);
@@ -348,9 +358,33 @@ public class DataServlet extends HttpServlet {
 	protected void doDelete(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 		String type = request.getParameter("type");
 		String id = request.getParameter("id");
-		System.out.println("doDelete: type=" + type + " id=" + id);
+		String query = request.getParameter("query");
+		
+		System.out.println("doDelete: type=" + type + " id=" + id + " query="+query);
 
-		if (id == null) {
+		
+		if (query != null) {
+			DBCollection collection = mDS.getCollection(type);
+			DBObject queryObj = (DBObject) JSON.parse(query);
+			DBCursor cursor = collection.find(queryObj);
+			System.out.println("found "+cursor.count());
+
+			ArrayList<Object> list = new ArrayList<Object>();
+			while(cursor.hasNext()) {
+				DBObject obj = cursor.next();
+				list.add(obj.get("_id"));
+			}
+			DBObject ids = new BasicDBObject();
+			DBObject in = new BasicDBObject();
+			in.put("$in", list);
+			ids.put("_id", in);
+			
+			WriteResult result = collection.remove(ids);			
+			mDS.sendJSON(result, request, response);
+			return;
+		}
+		
+		if (id == null ) {
 			response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Delete all is not supported");
 			return;
 		}

@@ -50,6 +50,9 @@ function DefaultMapView(div, options) {
 		}
 		return point;
 	});
+	
+	
+	
 	loadData();
 
 	function showFloorList(floors) {
