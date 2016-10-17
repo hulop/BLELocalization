@@ -192,12 +192,22 @@ var editor = new JSONEditor(document.getElementById('editor_holder'),{
 		"originz": {
 		  "type": "number",
 		  "default": 0
+		},
+		"floor": {
+		  "type": "number",
+		  "default": 0
 		}
 	      }
 	    }
 	  }
-	}
+        }
       },
+      "ObservationModelParameters": {
+	"type": "string",
+	"media": {
+	    "binaryEncoding": "text"
+	}
+      }/*,
       "OrientationMeterAverageParameters": {
 	"type": "object",
 	"properties": {
@@ -224,12 +234,6 @@ var editor = new JSONEditor(document.getElementById('editor_holder'),{
 	  "maxTrial": {"type": "number", "default": 1}
 	}
       },
-      "ObservationModelParameters": {
-	"type": "string",
-	"media": {
-	    "binaryEncoding": "text"
-	}
-      },
       "alphaWeaken": {
 	"type": "number",
 	"default": 0.5
@@ -237,7 +241,7 @@ var editor = new JSONEditor(document.getElementById('editor_holder'),{
       "nStrongestBeacons": {
 	"type": "number",
 	"default": 10
-      }
+      }*/
     }
   }
 });
