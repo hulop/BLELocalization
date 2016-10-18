@@ -527,12 +527,22 @@ public class DataServlet extends HttpServlet {
 		
 			if (info.containsField("refid") && info.containsField("x") && info.containsField("y")) {
 				DBObject refpoint = mCollRef.findOne(info.get("refid"));
+				
 				if (refpoint != null && refpoint.containsField("x") && refpoint.containsField("y") && refpoint.containsField("floor")
 						&& refpoint.containsField("floor_num")) {
-					info.put("absx", ((Number) info.get("x")).doubleValue() + ((Number) refpoint.get("x")).doubleValue());
-					info.put("absy", ((Number) info.get("y")).doubleValue() + ((Number) refpoint.get("y")).doubleValue());
+					
+					AffineTransform at = new AffineTransform();
+					at.translate(((Number) refpoint.get("x")).doubleValue(), ((Number) refpoint.get("y")).doubleValue());
+					at.rotate(Math.toRadians(((Number) refpoint.get("rotate")).doubleValue()));
+					Point2D.Double src = new Point2D.Double(((Number) info.get("x")).doubleValue(), ((Number) info.get("y")).doubleValue());
+					Point2D.Double dst = new Point2D.Double();
+					at.transform(src, dst);
+					
+					info.put("absx", dst.getX());
+					info.put("absy", dst.getY());
 					info.put("floor", refpoint.get("floor"));
 					info.put("floor_num", refpoint.get("floor_num"));
+
 					System.out.println(JSON.serialize(info));
 				} else {
 					info.put("absx", ((Number) info.get("x")).doubleValue());

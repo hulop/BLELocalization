@@ -262,7 +262,7 @@ THE SOFTWARE.
 			actions.append(createButton('edit', function() {
 				showSampleForm(obj);
 			}), createButton('delete', function() {
-				deleteData(sampleDataType, id, md.name);
+				deleteData(sampleDataType, id, "sample data \""+md.name+"\"");
 			}), createLink('details', 'data/' + sampleDataType + '/' + id));
 
 			var tags = (info.tags || []).join(', ');
