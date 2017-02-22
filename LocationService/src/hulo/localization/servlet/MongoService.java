@@ -30,7 +30,7 @@ import hulo.localization.data.DataUtils;
 
 public class MongoService {
 	private static final String MONGO_HOST = "localhost:27017";
-	private static String DB_NAME = "locationservicedbisl";
+	private static String DB_NAME = "locationservicedb";
 	private static final String DB_NAME_PREFIX = "locationservicedb";
 	private static MongoService sDS;
 
