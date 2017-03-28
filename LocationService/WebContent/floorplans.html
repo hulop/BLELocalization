@@ -99,11 +99,11 @@ function showAnchorMap() {
 		});
   });
   $("#latitude").change(function() {
-	  _obj.lat = $(this).val();
+	  _obj.lat = parseFloat($(this).val());
 	  showMapOnGlobal(_obj);
   });
   $("#longitude").change(function() {
-	  _obj.lng = $(this).val();
+	  _obj.lng = parseFloat($(this).val());
 	  showMapOnGlobal(_obj);
   });
   $("#opacity").change(function() {
@@ -114,7 +114,7 @@ function showAnchorMap() {
 	  }
   });
   $("#rotate").change(function() {
-	  _obj.rotate = $(this).val();
+	  _obj.rotate = parseFloat($(this).val());
 	  showMapOnGlobal(_obj);
   });
   $("#overlays").change(function() {

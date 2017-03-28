@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<!----------------------------------------------------------------------------
+Copyright (c) 2014, 2015 IBM Corporation
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+------------------------------------------------------------------------------>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Sampling data manager</title>
+<script type="text/javascript"
+	src="js/lib/jquery/jquery-1.11.2.min.js"></script>
+<script type="text/javascript" src="js/datautils.js"></script>
+<script type="text/javascript"
+	src="js/lib/OpenLayers-2.13.1/OpenLayers.js"></script>
+<script type="text/javascript" src="js/util.js"></script>
+<style>
+table {
+border:1px solid gray;
+border-collapse: collapse;
+}
+table td {
+border: 1px solid gray;
+padding: 2px;
+}
+div#left, div#right {
+width:50%;
+float:left;
+}
+strong {
+margin: 5px 0px;
+display: block;
+}
+</style>
+<script type="text/javascript">
+var samplings;
+var refpoints, refpointsMap;
+var floorplans, floorplansMap;
+var refpointsSamplingsMap;
+var floorplanRefpointMap;
+var layers;
+
+var $status, timer;
+function showStatus(text) {
+	if (timer) clearInterval(timer);
+	if (!$status) $status = $("<div>").appendTo(document.body);
+	$status.text(text?text:"");
+	if (text) {
+		timer = setInterval(function() {
+			$status.text($status.text()+".");
+		}, 500);
+	}
+}
+
+$(document).ready(function() {
+	showStatus("loading samplings");
+	dataUtil.getData({
+		type: "samplings",
+		success: function(response) {
+			samplings = response;
+			refpointsSamplingsMap = {};
+			samplings.forEach(function(s) {
+				var id = s.information.refid.$oid;
+				var list = refpointsSamplingsMap[id]; 
+				if (!list) {
+					list = refpointsSamplingsMap[id] = [];
+				}
+				list.push(s);
+			});
+			showStatus("loading refpoints");
+			dataUtil.getData({
+				type: "refpoints",
+				success: function(response) {
+					refpoints = response;
+					refpointsMap = {};
+					refpoints.forEach(function(rp) {
+						refpointsMap[rp._id.$oid] = rp;
+					});
+										
+					showStatus("loading floorplans");
+					dataUtil.getData({
+						type: "floorplans",
+						success: function(response) {
+							floorplansMap = {};
+							floorplans = response;
+							floorplans.forEach(function(fp) {
+								fp.image = new Image();
+								fp.image.src = "data/file/"+fp.filename;
+								floorplansMap[fp._id.$oid] = fp;
+							});
+							floorplanRefpointMap = {};
+ 							refpoints.forEach(function(rp) {
+ 								floorplanRefpointMap[rp.refid.$oid] = rp; 								
+							});
+ 							layers = {};
+ 							var temp = $("<canvas>")[0];
+ 							var size = 1000;
+ 							temp.width = temp.height = size;
+ 							var ctx = temp.getContext("2d");
+ 							ctx.fillStyle = "white";
+ 							ctx.fillRect(0, 0, size, size);
+ 							floorplans.forEach(function(fp) {
+ 								var f = parseInt(fp.floor);
+ 								var ls = layers[f];
+ 								if (!ls) {
+ 									layers[f] = {
+ 											floor_num: f,
+ 											data: temp.toDataURL(),
+ 											param: {
+ 												originx: size/2,
+ 												originy: size/2,
+ 												originz: 0,
+ 												ppmx: 0.1,
+ 												ppmy: 0.1,
+ 												ppmz: 0,
+ 												floor: f
+ 											}
+ 									};
+ 								}
+ 							});
+							showStatus();
+							generateTable(refpoints);
+						}
+					})	
+				}
+			})			
+		}
+	});
+	floorplans = [];
+	refpoints = [];
+	samplings = [];
+	generateTable([]);
+});
+
+function getAnchor(refpoint) {
+	return {
+		lat:refpoint.anchor_lat,
+		lon:refpoint.anchor_lng, 
+		rotate:refpoint.anchor_rotate
+	};
+}
+
+function convertSamplings(samplings, refpoint) {
+	return samplings.map(function(sp) {
+		var local = {x:sp.information.absx,y:sp.information.absy};
+		var anchor1 = getAnchor(refpointsMap[sp.information.refid.$oid]);
+		var anchor2 = getAnchor(refpoint);
+		
+		var global = xy2latlon(local, anchor1);
+		var local2 = latlon2xy(global, anchor2);
+		var global2 = xy2latlon(local2, anchor2);
+		
+		var obj = $.extend({}, sp);
+		obj.information.x = local2.x;
+		obj.information.y = local2.y;
+		obj.information.absx = local2.x + refpoint.x;
+		obj.information.absy = local2.y + refpoint.y;
+		obj.information.lat = global2.lat;
+		obj.information.lng = global2.lon;
+		return obj;
+	});
+}
+
+function geoJSONSamplings(samplings) {
+	return {
+		type: "FeatureCollection",
+		features: samplings.map(function(sp) {
+			return {
+				type:"Feature",
+				geometry: {
+					type: "Point",
+					coordinates: [sp.information.lon, sp.information.lat]
+				},
+				properties: sp.information,
+				beacons : sp.beacons			
+			}
+		})
+	};
+}
+function jsonSamplings(samplings, refpoint) {
+	return convertSamplings(samplings, refpoint);
+}
+function csvSamplings(samplings, refpoint) {
+	var csv = samplings.map(function(sp) {
+		var info = sp.information; 
+		return sp.beacons.map(function(b) {
+			var a = [b.timestamp,"Beacon",info.absx,info.absy,info.z,info.floor_num];
+			a.push(b.data.length);
+			b.data.forEach(function(d) {
+				a.splice(a.length,0, d.major,d.minor,d.rssi);
+			});
+			return a.join(",")+"\n";
+		}).join("");
+	});
+	//console.log(csv);
+	return csv.join("");
+}
+
+function convertBeacons(floorplans, refpoint) {
+	var beacons = [];
+	floorplans.forEach(function(fp) {
+		if (fp.beacons && fp.beacons.features) {
+			fp.beacons.features.forEach(function(b) {
+				var local = {x:b.geometry.coordinates[0], y:b.geometry.coordinates[1]};
+				var anchor1 = getAnchor(floorplanRefpointMap[fp._id.$oid]);
+				var	anchor2 = getAnchor(refpoint);
+				
+				var global = xy2latlon(local, anchor1);
+				var local2 = latlon2xy(global, anchor2);
+				var global2 = xy2latlon(local2, anchor2);
+			
+				beacons.push({
+					x: local2.x,
+					y: local2.y,
+					z: 0,
+					floor: fp.floor,
+					uuid:b.properties.uuid,
+					major:b.properties.major,
+					minor:b.properties.minor,
+					power:b.properties.power
+				});
+			});
+		}
+	});
+	return beacons;
+}
+
+function csvBeacons(beacons) {
+	return beacons.map(function(b) {
+		return [b.uuid,b.major,b.minor,b.x,b.y,b.z,b.floor].join(",")+"\n";
+	}).join("");
+}
+
+function generateTable(fps) {
+	$("#left").empty();
+	$("#right").empty();
+	
+	var $div0 = $("<div>").appendTo($("#left")).append("<strong>Floor Plans</strong>");
+	var $table = $("<table>").appendTo($div0);
+	
+	generateTR(["Export","Floor plan","#Samples", "#Beacons", "Anchor for export"]).appendTo($table);
+	fps.forEach(function(fp) {
+		var $check = $("<input type='checkbox'>").attr("id", fp._id.$oid).attr("checked","checked");
+		
+		var $label = $("<label>").attr("for", fp._id.$oid).text(fp.floor);
+		
+		var samples = refpointsSamplingsMap[fp._id.$oid] || [];
+		var beacons = (floorplansMap[fp.refid.$oid].beacons && floorplansMap[fp.refid.$oid].beacons.features) || [];
+		var $nums = $("<span>").text(`${samples.length}`);
+		var $numb = $("<span>").text(`${beacons.length}`);
+		var $radio = $("<input type='radio'>").attr("name", "anchor").val(fp._id.$oid);
+
+		//var $image = $("<img>").attr("src", "data/file/"+floorplansMap[fp.refid.$oid].filename)
+		//				.css("max-width","120px").css("max-height","120px");
+
+		generateTR([$check, $label, $nums, $numb, $radio]).appendTo($table);
+	});
+	var $div1 = $("<div>").appendTo($("#left")).append("<strong>Samples</strong>");
+	var $button = $("<button>Export GeoJSON</button>").appendTo($div1);
+	function convertedSamples() {
+		var refid = $("input[name=anchor]:checked").val();
+		if (!refid) {
+			alert("Need to select an anchor of floor plan for export");
+			return;
+		}
+		return convertSamplings(samplings, refpointsMap[refid]);
+	}
+	$button.click(function() {
+		var converted = convertedSamples();
+		downloadFile(JSON.stringify(geoJSONSamplings(converted)), "json",
+					`samplings_${(new Date()).getTime()}.geojson`);		
+	});
+	var $button = $("<button>Export JSON</button>").appendTo($div1);
+	$button.click(function() {
+		var converted = convertedSamples();
+		downloadFile(JSON.stringify(converted), "json", 
+					`samplings_${(new Date()).getTime()}.json`);		
+	});
+	var $button = $("<button>Export CSV</button>").appendTo($div1);
+	$button.click(function() {
+		var converted = convertedSamples();
+		downloadFile(csvSamplings(converted), "csv",
+					`samplings_${(new Date()).getTime()}.csv`);		
+	});
+	
+	var $div2 = $("<div>").appendTo($("#left")).append("<strong>Beacons</strong>");
+	var $button = $("<button>Export CSV</button>").appendTo($div2);
+	function convertedBeacons() {
+		var refid = $("input[name=anchor]:checked").val();
+		if (!refid) {
+			alert("Need to select an anchor of floor plan for export");
+			return;
+		}
+		return convertBeacons(floorplans, refpointsMap[refid]);
+	}
+	$button.click(function() {
+		var converted = convertedBeacons();
+		//console.log(converted);
+		downloadFile(csvBeacons(converted), "csv",
+					`beacons_${(new Date()).getTime()}.csv`);		
+	});
+	
+	var $div3 = $("<div>").appendTo($("#right")).append("<strong>Layers</strong>");
+
+	var $table2 = $("<table>").appendTo($div3);
+	var $opt1 = $("<input type='radio'>").val("none").attr("name", "mm_type").attr("id","mm_none").attr("checked","checked").appendTo($div3);
+	var $lab1 = $("<label>").attr("for","mm_none").text("No map matching").appendTo($div3);
+	$div3.append("<br>");
+	var $opt2 = $("<input type='radio'>").val("geojson").attr("name", "mm_type").attr("id","mm_geojson").appendTo($div3);
+	var $lab2 = $("<label>").attr("for","mm_geojson").text("Generate map matching image from pedestrian network (geoJSON)").appendTo($div3);
+	$div3.append("<br>");
+	var $mmfile = $("<input type='file'>").css("display", "none").appendTo($div3);
+	//var $mmbtn = $("<button>").css("display", "none").text("Import").appendTo($div3);
+	$mmfile.change(function() {
+		var refid = $("input[name=anchor]:checked").val();
+		if (!refid) {
+			alert("Need to select an anchor of floor plan for export");
+			$mmfile.val("");
+			return;
+		}
+		if ($mmfile[0].files[0]) {
+			var fr = new FileReader();
+			fr.onload = function() {
+				var geojson = JSON.parse(fr.result);
+				for(var k in layers) {
+					var l = layers[k];
+					generateMMImage(l, geojson, refpointsMap[refid]);
+					$("#layer"+k).attr("src", l.data);
+				}
+			};			
+			fr.readAsText($mmfile[0].files[0]);
+		} 
+		else {
+			alert("no file is specified");	
+		}
+	});
+	$("input[name=mm_type]").change(function(e) {	
+		var selected = ($(this).val() == "geojson");
+		$mmfile.css("display", selected?"inline":"none");
+		//$mmbtn.css("display", selected?"inline":"none");
+	});
+	
+	if (layers) {
+		generateTR(["Level", "image"]).appendTo($table2);
+		Object.keys(layers).sort().forEach(function(k){
+			var f = k<0?`Level ${-k}`:`Level ${k-0+1}`;
+			var i = $("<img>").attr("id", "layer"+k).attr("height", "50px");
+			generateTR([f, i]).appendTo($table2);
+		});	
+	}
+	
+
+	var $div4 = $("<div>").appendTo($("#right")).append("<strong>2D Map Data</strong>");
+	var $exbtn = $("<button>").text("Export").css("font-size", "200%").appendTo($div4);
+	$exbtn.click(function() {
+		var refid = $("input[name=anchor]:checked").val();
+		if (!refid) {
+			alert("Need to select an anchor of floor plan for export");
+			$mmfile.val("");
+			return;
+		}
+		if ($mmfile.is(':visible')) {
+			if (!$mmfile[0].files[0]) {
+				alert("Need to specify a geoJSON file");
+				return;
+			}
+		}
+		composeData();
+	});
+}
+
+function composeData() {
+	var refid = $("input[name=anchor]:checked").val();
+	var refpoint = refpointsMap[refid];
+	var samples = csvSamplings(convertSamplings(samplings, refpoint));
+	var beacons = csvBeacons(convertBeacons(floorplans, refpoint));
+	var temp = [];
+	Object.keys(layers).sort().forEach(function(key) {
+		temp.push(layers[key]);
+	});
+	var json = {
+			anchor: {
+				latitude: refpoint.anchor_lat,
+				longitude: refpoint.anchor_lng,
+				rotate: refpoint.anchor_rotate
+			},
+			samples: [{
+				data:samples
+			}],
+			beacons: [{
+				data:beacons
+			}],
+			layers: temp
+	};
+	downloadFile(JSON.stringify(json), "json", "2dMapData.json");
+}
+
+var canvas1 = $("<canvas>")[0];
+var canvas2 = $("<canvas>")[0];
+
+function generateMMImage(layer, geojson, refpoint) {
+	var minlat=Number.MAX_VALUE,minlon=Number.MAX_VALUE;
+	var maxlat=-Number.MAX_VALUE,maxlon=-Number.MAX_VALUE;
+	
+	var nodeMap = {};
+	// check extent
+	geojson.features.forEach(function(f) {
+		var lon = f.geometry.coordinates[0];
+		var lat = f.geometry.coordinates[1];
+		if (lat < minlat) minlat = lat;
+		if (lon < minlon) minlon = lon;
+		if (maxlat < lat) maxlat = lat;
+		if (maxlon < lon) maxlon = lon;
+		
+		if (f.properties["ノードID"]) {
+			nodeMap[f.properties["ノードID"]] = f;
+		}
+	});
+	
+	var ppm = 10;
+	var anchor = getAnchor(refpoint);
+	
+	var globalmin = {lat:minlat, lon:minlon};
+	var globalmax = {lat:maxlat, lon:maxlon};
+	var localmin = latlon2xy(globalmin, anchor);	
+	var localmax = latlon2xy(globalmax, anchor);
+	var margin = 15;
+	localmin.x -= margin;
+	localmin.y -= margin;
+	localmax.x += margin;
+	localmax.y += margin;
+	
+	var width = Math.abs(localmin.x-localmax.x) * ppm;
+	var height = Math.abs(localmin.y-localmax.y) * ppm;
+	var originx = -localmin.x * ppm;
+	var originy = height + localmin.y * ppm;
+	//console.log([width, height]);
+	//console.log([originx, originy]);
+	
+	// for debug, draw floor plan on the second image
+	canvas2.width = width;
+	canvas2.height = height;
+	var ctx2 = canvas2.getContext("2d");
+	ctx2.save();
+	ctx2.fillStyle = "white";
+	ctx2.fillRect(0,0,width,height);	
+	ctx2.scale(ppm, ppm);
+	
+	floorplans.forEach(function(fp) {
+		var f = parseInt(fp.floor);
+		if (f != layer.floor_num) {
+			return;
+		}
+	
+		//console.log(fp);
+		ctx2.save();
+		var global = {lat: fp.lat, lon: fp.lng};
+		var local = latlon2xy(global, anchor);
+		//console.log(local);
+		//console.log([-fp.origin_x/fp.ppm_x, -(fp.height-fp.origin_y)/fp.ppm_y]);
+		ctx2.translate(local.x, -local.y);
+		ctx2.translate(originx/ppm, originy/ppm);
+		ctx2.rotate((fp.rotate - refpoint.anchor_rotate) / 180 * Math.PI);
+		ctx2.translate(-fp.origin_x/fp.ppm_x, -(fp.height-fp.origin_y)/fp.ppm_y);
+		ctx2.globalAlpha = 0.5;
+		ctx2.drawImage(fp.image, 0, 0, fp.width, fp.height, 0, 0, fp.width/fp.ppm_x, fp.height/fp.ppm_y);
+		ctx2.restore();
+	});
+	ctx2.restore();
+	ctx2.save();
+	ctx2.translate(originx, originy);
+	ctx2.scale(ppm, -ppm);
+	samplings.forEach(function(s) {
+		var info = s.information;
+		if (info.floor_num == layer.floor_num) {
+			var local = info;			
+			var anchor2 = getAnchor(refpointsMap[info.refid.$oid]); 
+			var global = xy2latlon(local, anchor2)
+			var local2 = latlon2xy(global, anchor);
+
+			ctx2.globalAlpha = 0.2;
+			ctx2.fillStyle = "blue";
+			ctx2.beginPath();
+			ctx2.moveTo(local2.x, local2.y);
+			ctx2.arc(local2.x, local2.y, 0.5, 0, Math.PI*2);
+			ctx2.fill();
+		}		
+	});
+	ctx2.restore();
+	
+	// draw map matching image based on link network
+	// draw 15 meters black then draw 4 meters white (changed by 有効幅員)
+	canvas1.width = width;
+	canvas1.height = height;
+	var ctx = canvas1.getContext("2d");
+	ctx.clearRect(0,0,width,height);	
+	ctx.translate(originx, originy);
+	ctx.scale(ppm, -ppm);
+	geojson.features.forEach(function(f) {
+		if (f.properties["リンクID"]) {
+			var s = nodeMap[f.properties["起点ノードID"]];
+			var t = nodeMap[f.properties["終点ノードID"]];
+			var height = parseInt(s.properties["高さ"]);
+			height = height<1?height:height-1;
+			if (s.properties["高さ"] == t.properties["高さ"] &&
+				 height == layer.floor_num) {
+				var gs = {lon:s.geometry.coordinates[0], lat:s.geometry.coordinates[1]};
+				var gt = {lon:t.geometry.coordinates[0], lat:t.geometry.coordinates[1]};
+				var ls = latlon2xy(gs, anchor);	
+				var lt = latlon2xy(gt, anchor);
+				ctx.globalCompositeOperation = "source-over";
+				ctx.lineWidth = 15;
+				ctx.strokeStyle = "black";
+				ctx.lineCap = "round";
+				ctx.beginPath();
+				ctx.moveTo(ls.x, ls.y);
+				ctx.lineTo(lt.x, lt.y);
+				ctx.stroke();
+			}
+		}
+	});
+	geojson.features.forEach(function(f) {
+		if (f.properties["リンクID"]) {
+			var s = nodeMap[f.properties["起点ノードID"]];
+			var t = nodeMap[f.properties["終点ノードID"]];
+			var height = parseInt(s.properties["高さ"]);
+			height = height<1?height:height-1;
+			if (s.properties["高さ"] == t.properties["高さ"] &&
+					height == layer.floor_num) {
+				var gs = {lon:s.geometry.coordinates[0], lat:s.geometry.coordinates[1]};
+				var gt = {lon:t.geometry.coordinates[0], lat:t.geometry.coordinates[1]};
+				var ls = latlon2xy(gs, anchor);	
+				var lt = latlon2xy(gt, anchor);
+				ctx.globalCompositeOperation = "destination-out";
+				ctx.lineWidth = 4;
+				if (f.properties["有効幅員"] == "0") {
+					ctx.lineWidth = 1;
+				} else if (f.properties["有効幅員"] == "1") {
+					ctx.lineWidth = 1.5;					
+				} else if (f.properties["有効幅員"] == "2") {
+					ctx.lineWidth = 2;					
+				}
+				
+				ctx.strokeStyle = "white";
+				ctx.lineCap = "round";
+				ctx.beginPath();
+				ctx.moveTo(ls.x, ls.y);
+				ctx.lineTo(lt.x, lt.y);
+				ctx.stroke();
+			}
+		}
+	});
+	// fill elevator;
+	geojson.features.forEach(function(f) {
+		if (f.properties["リンクID"]) {
+			var s = nodeMap[f.properties["起点ノードID"]];
+			var t = nodeMap[f.properties["終点ノードID"]];
+			var sheight = parseInt(s.properties["高さ"]);
+			sheight = sheight<1?sheight:sheight-1;
+			var theight = parseInt(t.properties["高さ"]);
+			theight = theight<1?theight:theight-1;
+			if (f.properties["経路の種類"] == 10) {
+				//console.log([f, sheight, theight, layer.floor_num]);
+				if (sheight == layer.floor_num || theight == layer.floor_num) {
+					var gs = {lon:s.geometry.coordinates[0], lat:s.geometry.coordinates[1]};
+					var ls = latlon2xy(gs, anchor);	
+					ctx.globalCompositeOperation = "source-over";
+					ctx.fillStyle = "rgb(255, 255, 0)";
+					ctx.beginPath();
+					ctx.moveTo(ls.x, ls.y);
+					ctx.arc(ls.x, ls.y, 2, 0, Math.PI*2);
+					ctx.fill();
+				}	
+			}
+		}
+	});
+	ctx2.drawImage(canvas1, 0, 0);
+	
+	layer.data = canvas2.toDataURL();
+	
+	layer.param = {
+		ppmx: ppm,
+		ppmy: -ppm,
+		ppmz: 1,
+		originx: originx,
+		originy: originy, 
+		originz: 0, 
+		floor: layer.floor_num
+	};
+}
+
+function generateTR(list) {
+	var $tr = $("<tr>");
+	list.forEach(function(item) {
+		$("<td>").append(item).appendTo($tr);		
+	});
+	return $tr;
+}
+
+function downloadFile(data, type, filename) {  
+	var mime = "text/plain";
+	if (type == "json") mime = 'text/json;charset=utf-8;';
+	if (type == "csv") mime = 'text/comma-separated-values';
+	
+	  var blob = new Blob([data], { type: mime });
+	  if (navigator.msSaveBlob) {
+	    navigator.msSaveBlob(blob, filename);
+	  } else {
+	    var link = document.createElement("a");
+	    if (link.download !== undefined) {
+	      var url = URL.createObjectURL(blob);
+	      link.setAttribute("href", url);
+	      link.setAttribute("download", filename);
+	    } else {        
+	      link.href = `data:attachment/${type},` + data;
+	    }
+	    link.style = "visibility:hidden";
+	    document.body.appendChild(link);
+	    link.click();
+	    document.body.removeChild(link);
+	  }
+	}
+</script>
+</head>
+<body>
+<div id="left"></div>
+<div id="right"></div>
+</body>
+</html>

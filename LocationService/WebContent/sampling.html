@@ -417,9 +417,13 @@ THE SOFTWARE.
 	function createRefData(form) {
 		var floorInfo = floorList[form.ref_floor.value].floorInfo;
 		var data = {
+			'refid': floorInfo._id,
 			'filename': floorInfo.filename || "",
 			'floor' : floorInfo.floor,
 			'floor_num' : floorInfo.floor_num,
+			'anchor_lat' : floorInfo.lat,
+			'anchor_lng' : floorInfo.lng,
+			'anchor_rotate' : floorInfo.rotate,
 			'x' : parseFloat(form.ref_x.value),
 			'y' : parseFloat(form.ref_y.value),
 			'rotate' : parseFloat(form.ref_rotate.value),
@@ -1004,7 +1008,8 @@ THE SOFTWARE.
 </script>
 </head>
 <body>
-	<a href="floorplans.html">Manage Floor Plan</a>
+	<a href="floorplans.html">Manage Floor Plan</a><br>
+	<a href="data_composer.html">Data Compose Tool</a>
 
 	<div id='message' style='color: red;'></div>
 

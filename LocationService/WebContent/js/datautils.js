@@ -34,7 +34,7 @@ var dataUtil = (function() {
 
 	return {
 		'getData' : function(options) {
-			$.ajax('data/' + options.type, {
+			$.ajax('data/' + options.type +"?"+(new Date()).getTime(), {
 				'method' : 'GET',
 				'data' : options.data || {},
 				'dataType' : 'json',
