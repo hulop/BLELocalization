@@ -132,6 +132,7 @@ function showAnchorMap() {
   regionAnchor = new google.maps.Marker({map:gmap})
 }
 var regionOverlays = {};
+var floorplans = [];
 function showMapOnGlobal(opt) {	
 
 	opt.src = 'data/file?id=' + opt.filename;
@@ -161,6 +162,7 @@ function showMapOnGlobal(opt) {
 }
 
 	$(document).ready(function() {
+		$('button').button();
 		refresh();
 		mapView = new MapViewer("mapdiv", {
 			'editor' : FloorplanEditor,
@@ -244,6 +246,7 @@ function showMapOnGlobal(opt) {
 			},
 			'success' : function(data) {
 				console.log(data);
+				floorplans = data;
 				createFloorplanTable(data).appendTo('#data_table').dataTable();
 			},
 			'error' : function(xhr, text, error) {
@@ -712,6 +715,62 @@ function showMapOnGlobal(opt) {
 			showMap(selectedFloorplan);
 		}
 	}
+	
+	function exportFloorplans() {
+		function normalizelat(deg) {
+			while(deg < 0) {
+				deg += 360;
+			}
+			while(deg > 360) {
+				deg -= 360;
+			}
+			return deg;
+		}
+		console.log(floorplans);
+		var temp = [];
+		floorplans.forEach(function(fp) {
+			console.log(fp);
+			
+			temp.push({
+				rotate: fp.rotate,
+				floor: fp.floor,
+				image: "http://"+location.host+"/LocationService/data/file/"+fp.filename,
+				height: fp.height,
+				width: fp.width,
+				ppm_y: fp.ppm_x,
+				ppm_x: fp.ppm_y,
+				origin_y: fp.origin_y || fp.height/2,
+				origin_x: fp.origin_x || fp.width/2,
+				lat: fp.lat,
+				lng: normalizelat(fp.lng),
+				id: fp._metadata.name+"-"+fp.filename
+			});
+		});
+		downloadFile(JSON.stringify(temp), "json", "floormaps.json");
+	}
+	function downloadFile(data, type, filename) {  
+		var mime = "text/plain";
+		if (type == "json") mime = 'text/json;charset=utf-8;';
+		if (type == "csv") mime = 'text/comma-separated-values';
+		
+		  var blob = new Blob([data], { type: mime });
+		  if (navigator.msSaveBlob) {
+		    navigator.msSaveBlob(blob, filename);
+		  } else {
+		    var link = document.createElement("a");
+		    if (link.download !== undefined) {
+		      var url = URL.createObjectURL(blob);
+		      link.setAttribute("href", url);
+		      link.setAttribute("download", filename);
+		    } else {        
+		      link.href = `data:attachment/${type},` + data;
+		    }
+		    link.style = "visibility:hidden";
+		    document.body.appendChild(link);
+		    link.click();
+		    document.body.removeChild(link);
+		  }
+		}
 </script>
 </head>
 <body>
@@ -723,6 +782,8 @@ function showMapOnGlobal(opt) {
 				a floorplan</button>
 			<button id="reset_filter" onclick="resetFilter()">Reset
 				filter</button>
+				
+			<button id="exportFloorplans" onclick="exportFloorplans()">Export for MapServer</button>
 		</div>
 		<div class="ui-widget-content" id="data_table"></div>
 	</div>

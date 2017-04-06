@@ -200,7 +200,7 @@ THE SOFTWARE.
 					'_metadata' : 1,
 					'information' : 1
 				}),
-				'limit' : 100,
+				'limit' : 1000,
 				'sort' : JSON.stringify({
 					'_id' : -1
 				})
@@ -927,8 +927,9 @@ THE SOFTWARE.
 		}
 	
 }
-	function importLidarSamplings() {
-		var file = $("#import_lidar_file")[0].files[0];
+	
+	function importSamplings(fileInput, postfix, checkImport) {
+		var file = fileInput.files[0];
 		if (!file) {
 			return;
 		}
@@ -938,23 +939,21 @@ THE SOFTWARE.
 			'filename': floorInfo.filename || "",
 			'floor' : floorInfo.floor,
 			'floor_num' : floorInfo.floor_num,
+			'anchor_lat' : floorInfo.lat,
+			'anchor_lng' : floorInfo.lng,
+			'anchor_rotate' : floorInfo.rotate,
+			'refid' : floorInfo._id,
 			'x' : 0,
 			'y' : 0,
 			'rotate' : 0
 		};
 		var metadata = {
-			'name' : floorInfo._metadata.name+"_LiDAR",
+			'name' : floorInfo._metadata.name+postfix,
 			'comment' : file.name
 		};
 		
 		var fr = new FileReader();
-		fr.onload = function() {			
-			function checkImport(d) {
-				if ((d.data || d.accessibility) && d.information) {
-					return d;
-				}
-				return false;
-			}
+		fr.onload = function() {						
 			var input = JSON.parse(fr.result);
 			console.log(input);
 			if (!input.length || input.length == 0) {
@@ -978,9 +977,10 @@ THE SOFTWARE.
 					//todo					
 					input.forEach(function(i) {
 						var meta = {
-							name: floorInfo._metadata.name+"_LiDAR",
+							name: floorInfo._metadata.name+postfix,
 							comment: ""
 						}
+						delete i._id; 
 						i.information.refid = data._id;
 						dataUtil.postData({
 							'type' : sampleDataType,
@@ -1003,7 +1003,25 @@ THE SOFTWARE.
 		}
 		fr.readAsText(file);
 		
-		$("#import_lidar_file").val(null);		
+		$(fileInput).val(null);	
+	}
+	
+	function importJSONSamplings() {
+		importSamplings($("#import_json_sample_file")[0], "_import", function(d) {
+			if (d.beacons && d.information) {
+				return d;
+			}
+			return false;
+		});
+	}
+	
+	function importLidarSamplings() {
+		importSamplings($("#import_lidar_file")[0], "_LiDAR", function(d) {
+			if ((d.data || d.accessibility) && d.information) {
+				return d;
+			}
+			return false;
+		});
 	}
 </script>
 </head>
@@ -1071,6 +1089,12 @@ THE SOFTWARE.
     			<span>Import LiDAR Sampling</span>
     			<input type="file" id="import_lidar_file" class="upload" onchange="importLidarSamplings()"/>
 			</div>
+
+			<div class="fileUpload btn btn-primary">
+    			<span>Import JSON Sampling</span>
+    			<input type="file" id="import_json_sample_file" class="upload" onchange="importJSONSamplings()"/>
+			</div>
+
 		</div>
 		<div class="ui-widget-content" id="ref_data_table"></div>
 	</div>

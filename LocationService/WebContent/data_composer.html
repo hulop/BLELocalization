@@ -154,6 +154,7 @@ function getAnchor(refpoint) {
 }
 
 function convertSamplings(samplings, refpoint) {
+	var refids = $("input[type=checkbox]:checked").map(function(){return $(this).val()}).toArray();
 	return samplings.map(function(sp) {
 		var local = {x:sp.information.absx,y:sp.information.absy};
 		var anchor1 = getAnchor(refpointsMap[sp.information.refid.$oid]);
@@ -171,6 +172,8 @@ function convertSamplings(samplings, refpoint) {
 		obj.information.lat = global2.lat;
 		obj.information.lng = global2.lon;
 		return obj;
+	}).filter(function(sp){
+		return refids.indexOf(sp.information.refid.$oid) > -1;
 	});
 }
 
@@ -198,8 +201,11 @@ function csvSamplings(samplings, refpoint) {
 		var info = sp.information; 
 		return sp.beacons.map(function(b) {
 			var a = [b.timestamp,"Beacon",info.absx,info.absy,info.z,info.floor_num];
-			a.push(b.data.length);
-			b.data.forEach(function(d) {
+			var effective = b.data.filter(function(d) {
+				return d.rssi < 0;
+			});
+			a.push(effective.length);
+			effective.forEach(function(d) {
 				a.splice(a.length,0, d.major,d.minor,d.rssi);
 			});
 			return a.join(",")+"\n";
@@ -211,7 +217,11 @@ function csvSamplings(samplings, refpoint) {
 
 function convertBeacons(floorplans, refpoint) {
 	var beacons = [];
-	floorplans.forEach(function(fp) {
+	var refids = $("input[type=checkbox]:checked").map(function(){return $(this).val()}).toArray();
+	floorplans.filter(function(fp){
+		var fpid = floorplanRefpointMap[fp._id.$oid]._id.$oid;
+		return refids.indexOf(fpid) > -1;
+	}).forEach(function(fp) {
 		if (fp.beacons && fp.beacons.features) {
 			fp.beacons.features.forEach(function(b) {
 				var local = {x:b.geometry.coordinates[0], y:b.geometry.coordinates[1]};
@@ -234,7 +244,7 @@ function convertBeacons(floorplans, refpoint) {
 				});
 			});
 		}
-	});
+	})
 	return beacons;
 }
 
@@ -253,9 +263,9 @@ function generateTable(fps) {
 	
 	generateTR(["Export","Floor plan","#Samples", "#Beacons", "Anchor for export"]).appendTo($table);
 	fps.forEach(function(fp) {
-		var $check = $("<input type='checkbox'>").attr("id", fp._id.$oid).attr("checked","checked");
+		var $check = $("<input type='checkbox'>").val(fp._id.$oid).attr("checked","checked");
 		
-		var $label = $("<label>").attr("for", fp._id.$oid).text(fp.floor);
+		var $label = $("<label>").attr("for", fp._id.$oid).text(fp._metadata.name);
 		
 		var samples = refpointsSamplingsMap[fp._id.$oid] || [];
 		var beacons = (floorplansMap[fp.refid.$oid].beacons && floorplansMap[fp.refid.$oid].beacons.features) || [];
@@ -274,26 +284,32 @@ function generateTable(fps) {
 		var refid = $("input[name=anchor]:checked").val();
 		if (!refid) {
 			alert("Need to select an anchor of floor plan for export");
-			return;
+			return null;
 		}
 		return convertSamplings(samplings, refpointsMap[refid]);
 	}
 	$button.click(function() {
 		var converted = convertedSamples();
-		downloadFile(JSON.stringify(geoJSONSamplings(converted)), "json",
-					`samplings_${(new Date()).getTime()}.geojson`);		
+		if (converted) {
+			downloadFile(JSON.stringify(geoJSONSamplings(converted)), "json",
+						`samplings_${(new Date()).getTime()}.geojson`);
+		}
 	});
 	var $button = $("<button>Export JSON</button>").appendTo($div1);
 	$button.click(function() {
 		var converted = convertedSamples();
-		downloadFile(JSON.stringify(converted), "json", 
-					`samplings_${(new Date()).getTime()}.json`);		
+		if (converted) {
+			downloadFile(JSON.stringify(converted), "json", 
+						`samplings_${(new Date()).getTime()}.json`);
+		}
 	});
 	var $button = $("<button>Export CSV</button>").appendTo($div1);
 	$button.click(function() {
 		var converted = convertedSamples();
-		downloadFile(csvSamplings(converted), "csv",
-					`samplings_${(new Date()).getTime()}.csv`);		
+		if (converted) {
+			downloadFile(csvSamplings(converted), "csv",
+					`samplings_${(new Date()).getTime()}.csv`);
+		}
 	});
 	
 	var $div2 = $("<div>").appendTo($("#left")).append("<strong>Beacons</strong>");
@@ -302,15 +318,17 @@ function generateTable(fps) {
 		var refid = $("input[name=anchor]:checked").val();
 		if (!refid) {
 			alert("Need to select an anchor of floor plan for export");
-			return;
+			return null;
 		}
 		return convertBeacons(floorplans, refpointsMap[refid]);
 	}
 	$button.click(function() {
 		var converted = convertedBeacons();
 		//console.log(converted);
-		downloadFile(csvBeacons(converted), "csv",
-					`beacons_${(new Date()).getTime()}.csv`);		
+		if (converted) {
+			downloadFile(csvBeacons(converted), "csv",
+						`beacons_${(new Date()).getTime()}.csv`);
+		}
 	});
 	
 	var $div3 = $("<div>").appendTo($("#right")).append("<strong>Layers</strong>");
