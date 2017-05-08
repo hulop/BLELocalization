@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<!----------------------------------------------------------------------------
+Copyright (c) 2014, 2015 IBM Corporation
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+------------------------------------------------------------------------------>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Floor Plans</title>
+<script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?key=__NEED_TO_INPUT_YOUR_KEY__&v=3&libraries=geometry,places,visualization"></script>
+
+<script type="text/javascript"
+	src="js/lib/jquery/jquery-1.11.2.min.js"></script>
+<link rel="stylesheet" type="text/css"
+	href="js/lib/jquery-ui-1.11.4/jquery-ui.min.css">
+<script type="text/javascript"
+	src="js/lib/jquery-ui-1.11.4/jquery-ui.min.js"></script>
+<link rel="stylesheet" type="text/css"
+	href="js/lib/DataTables-1.10.6/media/css/jquery.dataTables.css">
+<script type="text/javascript"
+	src="js/lib/DataTables-1.10.6/media/js/jquery.dataTables.min.js"></script>
+<link rel="stylesheet" type="text/css"
+	href="js/lib/OpenLayers-2.13.1/theme/default/style.css">
+<script type="text/javascript"
+	src="js/lib/OpenLayers-2.13.1/OpenLayers.js"></script>
+<style type="text/css">
+.ui-button-text-only .ui-button-text {
+	padding: 2px 6px;
+	font-size: 16px;
+	font-weight: normal;
+}
+</style>
+<script type="text/javascript" src="/LocationService/js/datautils.js"></script>
+<script type="text/javascript" src="/LocationService/js/mapview.js"></script>
+<script type="text/javascript" src="/LocationService/js/floorplan_editor.js"></script>
+<script type="text/javascript" src="/LocationService/js/overlay.js"></script>
+<script>
+
+var floorplanDataType = "floorplans";
+var mapView, selectedFloorplan;
+
+var skew = location.search.match(/skew/);
+
+if (window.google) {
+	google.maps.event.addDomListener(window, 'load', showAnchorMap);
+}
+function showAnchorMap() {
+	var opts = {
+	    zoom: 20,
+	    center: new google.maps.LatLng(0,0),
+	    mapTypeId: google.maps.MapTypeId.ROADMAP
+  };
+
+  window.gmap = new google.maps.Map(document.getElementById("mapdiv2"), opts);
+  gmap.addListener('click', function(e) {
+	  _obj.lat = e.latLng.lat();
+	  _obj.lng = e.latLng.lng();
+	  showMapOnGlobal(_obj);
+	  });
+  
+  $("#save").button().click(function(){
+	  var query = {
+				'_id' : _obj._id
+			}, update = {
+				'$set' : {
+					'lat' : _obj.lat,
+					'lng' : _obj.lng,
+					'rotate' : _obj.rotate
+				}
+			};
+	  
+	  dataUtil.postData({
+			'type' : floorplanDataType,
+			'data' : {
+				'action' : 'update',
+				'query' : JSON.stringify(query),
+				'update' : JSON.stringify(update)
+			},
+			'success' : function(data) {
+				console.log(data);
+			},
+			'error' : function(xhr, text, error) {
+				$('#message').text(error || text);
+			}
+		});
+  });
+  $("#latitude").change(function() {
+	  _obj.lat = parseFloat($(this).val());
+	  showMapOnGlobal(_obj);
+  });
+  $("#longitude").change(function() {
+	  _obj.lng = parseFloat($(this).val());
+	  showMapOnGlobal(_obj);
+  });
+  $("#opacity").change(function() {
+	  for(var k in regionOverlays) {
+		regionOverlay = regionOverlays[k];
+  	    regionOverlay.setOption({opacity:parseFloat($("#opacity").val())});
+  		regionOverlay.setMap(gmap);
+	  }
+  });
+  $("#rotate").change(function() {
+	  _obj.rotate = parseFloat($(this).val());
+	  showMapOnGlobal(_obj);
+  });
+  $("#overlays").change(function() {
+	  for(var i = 0; i < this.options.length; i++) {
+		  var o = this.options[i];
+			 if (o.selected) {
+			 regionOverlays[o._data.filename].setMap(gmap);
+		 } else {
+			 regionOverlays[o._data.filename].setMap(null);
+		 }
+	  }
+  });
+  
+  //regionOverlay = new FloorPlanOverlay();  
+  regionAnchor = new google.maps.Marker({map:gmap})
+}
+var regionOverlays = {};
+var floorplans = [];
+function showMapOnGlobal(opt) {	
+
+	opt.src = 'data/file?id=' + opt.filename;
+	opt.lat = opt.lat || $("#latitude").val();
+	opt.lng = opt.lng || $("#longitude").val();
+	opt.rotate = opt.rotate || $("#rotate").val();
+	
+	regionAnchor.setPosition(new google.maps.LatLng(opt.lat, opt.lng));	
+
+	$("#latitude").val(opt.lat);
+	$("#longitude").val(opt.lng);
+	$("#rotate").val(opt.rotate);
+
+	var regionOverlay = regionOverlays[opt.filename];
+	if (!regionOverlay) {
+		regionOverlay = new FloorPlanOverlay();
+		regionOverlays[opt.filename] = regionOverlay;
+		gmap.setCenter(new google.maps.LatLng(opt.lat, opt.lng));
+		var option = $("<option>").text(opt._metadata.name).attr("selected",true);
+		$("#overlays").append(option);
+		option[0]._data = opt;
+	}
+	
+	regionOverlay.setOption(opt);
+	regionOverlay.setOption({border:1, opacity:parseFloat($("#opacity").val())});
+	regionOverlay.setMap(gmap);
+}
+
+	$(document).ready(function() {
+		$('button').button();
+		refresh();
+		mapView = new MapViewer("mapdiv", {
+			'editor' : FloorplanEditor,
+			'mapProjection' : new OpenLayers.Projection('EPSG:3857'),
+			'externalProjection' : new OpenLayers.Projection(skew ? 'PROJ:EXTERNAL2' : 'PROJ:EXTERNAL'),
+			'click' : function(x, y) {
+				console.log([ x, y ]);
+				if ($('#origin_x').is(':focus') || $('#origin_y').is(':focus')) {
+					var ppm_x = parseFloat($("#ppm_x").val());
+					var ppm_y = parseFloat($("#ppm_y").val());
+					var origin_x = parseFloat($("#origin_x").val());
+					var origin_y = parseFloat($("#origin_y").val());
+					$('#origin_x').val(parseInt(x * ppm_x + origin_x));
+					$('#origin_y').val(parseInt(y * ppm_y + origin_y));
+					var mapInfo = {
+						origin : {
+							x : parseInt(x * ppm_x + origin_x),
+							y : parseInt(y * ppm_x + origin_y)
+						},
+						ppm : {
+							x : ppm_x,
+							y : ppm_y
+						}
+					};
+					setProjections(mapInfo);
+					mapView.drawGrid(mapInfo.origin, mapInfo.ppm);
+				}
+				if ($('#ppm_x').is(':focus') || $('#ppm_y').is(':focus')) {
+					var ppm_x = parseFloat($("#ppm_x").val());
+					var ppm_y = parseFloat($("#ppm_y").val());
+					var origin_x = parseFloat($("#origin_x").val());
+					var origin_y = parseFloat($("#origin_y").val());
+					if (!window._pclick) {
+						window._pclick = {
+							x : x,
+							y : y
+						};
+					} else {
+						var dist = Math.sqrt(Math.pow(ppm_x * (_pclick.x - x), 2) + Math.pow(ppm_y * (_pclick.y - y), 2));
+						var actual = prompt("How long between distance");
+						if (actual) {
+							var ppm_x = parseInt(dist / actual * 100) / 100;
+							var ppm_y = parseInt(dist / actual * 100) / 100;
+							$("#ppm_x").val(ppm_x);
+							$("#ppm_y").val(ppm_y);
+							var mapInfo = {
+								origin : {
+									x : origin_x,
+									y : origin_y
+								},
+								ppm : {
+									x : ppm_x,
+									y : ppm_y
+								}
+							};
+							setProjections(mapInfo);
+							mapView.drawGrid(mapInfo.origin, mapInfo.ppm);
+						}
+						_pclick = null;
+					}
+				}
+			},
+		});
+	});
+
+	function refresh() {
+		refreshSampleTable();
+	}
+
+	function refreshSampleTable() {
+		$('#data_table').empty();
+		var query = {};
+
+		dataUtil.getData({
+			'type' : floorplanDataType,
+			'data' : {
+				'query' : JSON.stringify(query),
+				'sort' : JSON.stringify({
+					'_id' : -1
+				})
+			},
+			'success' : function(data) {
+				console.log(data);
+				floorplans = data;
+				createFloorplanTable(data).appendTo('#data_table').dataTable();
+			},
+			'error' : function(xhr, text, error) {
+				$('#message').text(error || text);
+			}
+		});
+	}
+
+	function createFloorplan(form) {
+		var $form = $(form);
+
+		var metadata = {
+			'name' : $form.find('#name').val() || '',
+			'comment' : $form.find('#comment').val() || ''
+		};
+		var id = $form.find('#floorplan_id').val();
+		var group = $form.find('#group').val();
+		var floor = parseFloat($form.find('#floor').val());
+		var origin_x = parseFloat($form.find('#origin_x').val());
+		var origin_y = parseFloat($form.find('#origin_y').val());
+		var ppm_x = parseFloat($form.find('#ppm_x').val());
+		var ppm_y = parseFloat($form.find('#ppm_y').val());
+		var filename = $form.find('#filename').val();
+		if (isNaN(origin_x) || isNaN(origin_y) || isNaN(ppm_x) || isNaN(ppm_y) || isNaN(floor) || !group) {
+			$('#message').text('Invalid group, floor, origin x, origin y, ppm x or ppm y.');
+			return;
+		}
+		selectedFloorplan.group = group;
+		selectedFloorplan.floor = floor;
+		selectedFloorplan.origin_x = origin_x;
+		selectedFloorplan.origin_y = origin_y;
+		selectedFloorplan.ppm_x = ppm_x;
+		selectedFloorplan.ppm_y = ppm_y;
+
+		if (id) {
+			var query = {
+				'_id' : {
+					'$oid' : id
+				}
+			}, update = {
+				'$set' : {
+					'_metadata.name' : metadata.name,
+					'_metadata.comment' : metadata.comment,
+					'group' : group,
+					'floor' : floor,
+					'origin_x' : origin_x,
+					'origin_y' : origin_y,
+					'ppm_x' : ppm_x,
+					'ppm_y' : ppm_y
+				}
+			};
+			dataUtil.postData({
+				'type' : floorplanDataType,
+				'data' : {
+					'action' : 'update',
+					'query' : JSON.stringify(query),
+					'update' : JSON.stringify(update)
+				},
+				'success' : function(data) {
+					console.log(data);
+					var file = $form.find("#file")[0];
+					if (file.files.length > 0) {
+						var reader = new FileReader();
+						reader.onload = function() {
+							var img = new Image();
+							img.onload = function() {
+								var width = img.width;
+								var height = img.height;
+								var formData = new FormData(form);
+								dataUtil.postFormData({
+									'type' : "file",
+									'id' : filename,
+									'data' : formData,
+									'method' : 'PUT',
+									'success' : function(data) {
+										hideFloorplanForm();
+										refresh();										
+									},
+									'error' : function(xhr, text, error) {
+										$('#message').text(error || text);
+									}
+								});
+							}
+							img.src = reader.result;
+						}
+						reader.readAsDataURL(file.files[0]);
+					} else {
+						hideFloorplanForm();
+						refresh();			
+					}
+				},
+				'error' : function(xhr, text, error) {
+					$('#message').text(error || text);
+				}
+			});
+			
+			return;
+		}
+
+		var file = $form.find("#file")[0];
+		if (file.files.length > 0) {
+			var reader = new FileReader();
+			reader.onload = function() {
+				var img = new Image();
+				img.onload = function() {
+					var width = img.width;
+					var height = img.height;
+					var formData = new FormData(form);
+					dataUtil.postFormData({
+						'type' : "file",
+						'data' : formData,
+						'success' : function(data) {
+							console.log([ "file save success", data ]);
+							data = {
+								'group' : group,
+								'floor' : floor,
+								'origin_x' : origin_x,
+								'origin_y' : origin_y,
+								'width' : width,
+								'height' : height,
+								'ppm_x' : ppm_x,
+								'ppm_y' : ppm_y,
+								'filename' : data.filename
+							};
+							console.log([ "send data", data ]);
+							dataUtil.postData({
+								'type' : floorplanDataType,
+								'data' : {
+									data : JSON.stringify(data),
+									_metadata : JSON.stringify(metadata)
+								},
+								'success' : function(data) {
+									console.log(data._id);
+									hideFloorplanForm();
+									refresh();
+								},
+								'error' : function(xhr, text, error) {
+									$('#message').text(error || text);
+								}
+							});
+						},
+						'error' : function(xhr, text, error) {
+							$('#message').text(error || text);
+						}
+					});
+				}
+				img.src = reader.result;
+			}
+			reader.readAsDataURL(file.files[0]);
+
+			return;
+		}
+	}
+
+	function createFloorplanTable(data) {
+		var table = $('<table>', {
+			'class' : 'display',
+			'cellpadding' : 0,
+			'cellspacing' : 0,
+			'border' : 0,
+			'data-order' : '[[ 0, "desc" ]]'
+		});
+		var head = createTableRow([ 'image', 'name', 'beacons', 'area', 'group', 'floor', 'action' ], '<th>');
+		$('<thead>').append(head).appendTo(table);
+		var tbody = $('<tbody>').appendTo(table);
+		$('<tfoot>').append(head.clone()).appendTo(table);
+		var total = 0, totalArea = 0;
+		data.forEach(function(obj, i) {
+			var id = obj._id.$oid;
+			var info = obj.information || {};
+			var md = obj._metadata || {};
+
+			var actions = $('<span>', {
+				'css' : {
+					'white-space' : 'nowrap'
+				}
+			});
+
+			if (info.floor) {
+				actions.append(createButton('plot', function() {
+					mapView.clearMarkers();
+					var floorInfo = getFloorInfo(info.floor, info.floor_num);
+					if (floorInfo) {
+						scrollToMap();
+						mapView.loadFloor(floorInfo, {
+							'success' : function() {
+								mapView.addMarker({
+									'x' : info.absx,
+									'y' : info.absy,
+									'options' : {
+										'sampling' : obj
+									}
+								});
+							}
+						});
+					}
+				}));
+			}
+
+			var image = new Image();
+			image.src = 'data/file?id=' + obj.filename;
+
+			actions.append(createButton('map', function() {
+				console.log([ "showMap", obj ]);
+				window._obj = obj;
+				showMap(obj);
+				showMapOnGlobal(obj);
+			}), createButton('edit', function() {
+				showFloorplanForm(obj);
+			}), createButton('delete', function() {
+				deleteData(floorplanDataType, id, md.name);
+			}), createLink('details', 'data/' + floorplanDataType + '/' + id), createLink('image', 'data/file?id=' + obj.filename),
+					createButton('analyze', function() {
+						analyze(obj);
+					}));
+
+			var img = createImage(image.src);
+			var num = 0, area = 0;
+			if (obj.beacons) {
+				num = obj.beacons.features.filter(function(a) {
+					return a.geometry.type == "Point"
+				}).length;
+
+				var json = JSON.stringify(obj.beacons);
+				var geojson_format = new OpenLayers.Format.GeoJSON({
+					'internalProjection' : mapView.mapProjection,
+					'externalProjection' : mapView.editorProjection
+				});
+				var features = geojson_format.read(json);
+				var a = features.filter(function(f) {
+					return f.geometry.CLASS_NAME == "OpenLayers.Geometry.Polygon"
+				})[0];
+				if (a) {
+					area = Math.round(a.geometry.getArea());
+				}
+			}
+			total += num;
+			totalArea += area;
+			tbody.append(createTableRow([ img, md.name, num + " beacons", area + "m<sup>2</sup>", obj.group, obj.floor, actions ], '<td>'));
+		});
+
+		tbody.append(createTableRow([ "", "Total", total + " beacons", totalArea+" m<sup>2</sup>", "", "", "" ], '<td>'));
+		return table;
+	}
+
+	function analyze(obj) {
+		var json = JSON.stringify(obj.beacons);
+		var geojson_format = new OpenLayers.Format.GeoJSON({
+			'internalProjection' : mapView.mapProjection,
+			'externalProjection' : mapView.editorProjection
+		});
+		var features = geojson_format.read(json);
+		var area = features.filter(function(f) {
+			return f.geometry.CLASS_NAME == "OpenLayers.Geometry.Polygon"
+		})[0];
+		var points = features.filter(function(f) {
+			return f.geometry.CLASS_NAME == "OpenLayers.Geometry.Point"
+		});
+		console.log(points);
+		var g = area.geometry;
+		g.calculateBounds();
+		b = g.bounds;
+
+		var max = 0;
+		var mean = 0;
+		var count = 0;
+		for (var x = b.left; x < b.right; x += 0.25) {
+			for (var y = b.bottom; y < b.top; y += 0.25) {
+				if (g.containsPoint({
+					x : x,
+					y : y
+				})) {
+					count++;
+					var min = 10000000;
+					points.forEach(function(p) {
+						var pg = p.geometry;
+						var d = Math.sqrt(Math.pow(pg.x - x, 2) + Math.pow(pg.y - y, 2));
+						if (d < min) {
+							min = d;
+						}
+					});
+					if (min > max) {
+						max = min;
+					}
+					mean += min;
+				}
+			}
+		}
+		mean /= count;
+		alert("Average=" + mean + ", Max=" + max + ", Count=" + count+" Area="+g.getArea());
+	}
+
+	var buttons = {}, links = {}, images = {};
+
+	function createButton(text, onclick) {
+		return (buttons[text] = buttons[text] || $('<button>', {
+			'text' : text
+		}).button()).clone().on('click', onclick);
+	}
+
+	function createImage(src) {
+		return (images[src] = images[src] || $('<img>', {
+			'src' : src,
+			'height' : '60px'
+		}));
+	}
+
+	function createLink(text, href) {
+		return (links[text] = links[text] || $('<a>', {
+			'text' : text,
+			'target' : '_blank'
+		}).button()).clone().attr('href', href);
+	}
+
+	function createTableRow(array, tag) {
+		var row = $('<tr>');
+		array.forEach(function(col) {
+			row.append($(tag).append(col));
+		});
+		//		row.find('button,a').button();
+		return row;
+	}
+
+	function deleteData(type, id, name) {
+		if (confirm('Delete ' + (name || id) + '?')) {
+			dataUtil.deleteData({
+				'type' : type,
+				'id' : id,
+				'success' : function(data) {
+					console.log(data);
+					refresh();
+				},
+				'error' : function(xhr, text, error) {
+					$('#message').text(error || text);
+				}
+			});
+		}
+	}
+
+	function showFloorplanForm(obj, ref) {
+		$('.floorplan_hide_edit').hide();
+
+		$('#floorplan_form .forCreate, #floorplan_form .forEdit').hide();
+		if (obj) {
+			$('#floorplan_form .forEdit').show();
+		} else {
+			$('#floorplan_form .forCreate').show();
+		}
+		//$('.sample_show_edit').show();
+		$('#floorplan_form').dialog({
+			'width' : 'auto',
+			'height' : 'auto',
+			'resizable' : false,
+			'close' : function() {
+				hideFloorplanForm();
+			}
+		});
+
+		console.log(obj);
+		if (obj) {
+			showMap(obj);
+		}
+		selectedFloorplan = obj = obj || {};
+
+		var md = obj._metadata || {};
+		var form = $('#floorplan_form form');
+		var info = obj || {};
+		form.find('#name').val(md.name || '');
+		form.find('#comment').val(md.comment || '');
+		form.find('#file').val('');
+		form.find('#filename').val(obj.filename || '');
+		form.find('#floorplan_id').val((obj._id && obj._id.$oid) || '');
+		form.find('#group').val(obj.group || "");
+		form.find('#floor').val(obj.floor || 0);
+		form.find('#origin_x').val(obj.origin_x || 0);
+		form.find('#origin_y').val(obj.origin_y || 0);
+		form.find('#ppm_x').val(obj.ppm_x || 1);
+		form.find('#ppm_y').val(obj.ppm_y || 1);
+	}
+
+	function showMap(obj) {
+		var image = new Image();
+		image.src = 'data/file?id=' + obj.filename;
+		image.onload = function() {
+
+			var mapInfo = {
+				imageURL : image.src,
+				width : image.width,
+				height : image.height,
+				origin : {
+					x : obj.origin_x,
+					y : obj.origin_y
+				},
+				ppm : {
+					x : obj.ppm_x,
+					y : obj.ppm_y
+				}
+			};
+			mapView.show(mapInfo);
+			setProjections(mapInfo);
+			mapView.drawGrid(mapInfo.origin, mapInfo.ppm);
+
+			mapView.getEditor().showBeaconsInFloorplan(obj);
+		};
+	}
+
+	function setProjections(mapInfo) {
+		OpenLayers.Projection.addTransform('EPSG:3857', 'PROJ:EXTERNAL', function(point) {
+			point.x = (point.x - mapInfo.origin.x) / mapInfo.ppm.x;
+			point.y = (point.y - mapInfo.origin.y) / mapInfo.ppm.y;
+			return point;
+		});
+		OpenLayers.Projection.addTransform('PROJ:EXTERNAL', 'EPSG:3857', function(point) {
+			point.x = point.x * mapInfo.ppm.x + mapInfo.origin.x;
+			point.y = point.y * mapInfo.ppm.y + mapInfo.origin.y;
+			return point;
+		});
+
+		function mult(a, b) {
+			var c = [ 0, 0, 0, 0, 0, 0, 0, 0, 0 ];
+			for (var i = 0; i < 9; i++) {
+				c[i] += a[i - i % 3] * b[i % 3];
+				c[i] += a[i - i % 3 + 1] * b[i % 3 + 3];
+				c[i] += a[i - i % 3 + 2] * b[i % 3 + 6];
+			}
+			return c;
+		}
+
+		OpenLayers.Projection.addTransform('EPSG:3857', 'PROJ:EXTERNAL2', function(point) {
+			var skew = [ 0.830825263, -0.720418695, 0, 0.309498148, 1.055217695, 0, 0, 0, 1 ];
+			//var skew = [0.3167808692800685, 1.070015380679342, 0, 0.8182703799565931, -0.7587598068688409, 0, 0, 0, 1];
+			var scale = [ 1 / mapInfo.ppm.x, 0, 0, 0, 1 / mapInfo.ppm.y, 0, 0, 0, 1 ];
+			var trans = [ 1, 0, -mapInfo.origin.x, 0, 1, -mapInfo.origin.y, 0, 0, 1 ];
+			var matrix = mult(mult(skew, scale), trans);
+			var p1 = [ point.x, 0, 0, point.y, 0, 0, 1, 0, 0 ];
+			var p2 = mult(matrix, p1);
+			//console.log(["map -> external, ", p1, p2]);
+
+			point.x = p2[0];
+			point.y = p2[3];
+			return point;
+		});
+		OpenLayers.Projection.addTransform('PROJ:EXTERNAL2', 'EPSG:3857', function(point) {
+			var skew = [ 0.95957689, 0.65512276, 0, -0.28144645, 0.75552251, 0, 0, 0, 1 ];
+			//var skew = [0.67993953,  0.95886175, 0, 0.73326812, -0.28387354, 0, 0, 0, 1];
+			var scale = [ mapInfo.ppm.x, 0, 0, 0, mapInfo.ppm.y, 0, 0, 0, 1 ];
+			var trans = [ 1, 0, mapInfo.origin.x, 0, 1, mapInfo.origin.y, 0, 0, 1 ];
+			var matrix = mult(mult(trans, scale), skew);
+			var p1 = [ point.x, 0, 0, point.y, 0, 0, 1, 0, 0 ];
+			var p2 = mult(matrix, p1);
+
+			//console.log(["external -> map, ", p1, p2]);
+
+			point.x = p2[0];
+			point.y = p2[3];
+			return point;
+		});
+	}
+
+	function hideFloorplanForm() {
+		if ($('#floorplan_form').is(':visible')) {
+			$('#floorplan_form').dialog('close');
+		}
+		$('.floorplan_hide_edit').show();
+		if (selectedFloorplan) {
+			showMap(selectedFloorplan);
+		}
+	}
+	
+	function exportFloorplans() {
+		function normalizelat(deg) {
+			while(deg < 0) {
+				deg += 360;
+			}
+			while(deg > 360) {
+				deg -= 360;
+			}
+			return deg;
+		}
+		console.log(floorplans);
+		var temp = [];
+		floorplans.forEach(function(fp) {
+			console.log(fp);
+			
+			temp.push({
+				rotate: fp.rotate,
+				floor: fp.floor,
+				image: "http://"+location.host+"/LocationService/data/file/"+fp.filename,
+				height: fp.height,
+				width: fp.width,
+				ppm_y: fp.ppm_x,
+				ppm_x: fp.ppm_y,
+				origin_y: fp.origin_y || fp.height/2,
+				origin_x: fp.origin_x || fp.width/2,
+				lat: fp.lat,
+				lng: normalizelat(fp.lng),
+				id: fp._metadata.name+"-"+fp.filename
+			});
+		});
+		downloadFile(JSON.stringify(temp), "json", "floormaps.json");
+	}
+	function downloadFile(data, type, filename) {  
+		var mime = "text/plain";
+		if (type == "json") mime = 'text/json;charset=utf-8;';
+		if (type == "csv") mime = 'text/comma-separated-values';
+		
+		  var blob = new Blob([data], { type: mime });
+		  if (navigator.msSaveBlob) {
+		    navigator.msSaveBlob(blob, filename);
+		  } else {
+		    var link = document.createElement("a");
+		    if (link.download !== undefined) {
+		      var url = URL.createObjectURL(blob);
+		      link.setAttribute("href", url);
+		      link.setAttribute("download", filename);
+		    } else {        
+		      link.href = `data:attachment/${type},` + data;
+		    }
+		    link.style = "visibility:hidden";
+		    document.body.appendChild(link);
+		    link.click();
+		    document.body.removeChild(link);
+		  }
+		}
+</script>
+</head>
+<body>
+	<a href="sampling.html">Manage Samplings</a>
+	<div class="floorplan_hide_edit ref_hide_edit">
+		<h1 class="ui-widget-header">Floor Plans</h1>
+		<div style="margin-top: -10px; margin-bottom: 10px;">
+			<button id="floorplanAdd_button" onclick="showFloorplanForm()">Add
+				a floorplan</button>
+			<button id="reset_filter" onclick="resetFilter()">Reset
+				filter</button>
+				
+			<button id="exportFloorplans" onclick="exportFloorplans()">Export for MapServer</button>
+		</div>
+		<div class="ui-widget-content" id="data_table"></div>
+	</div>
+	
+	<div id="floorplan_form" class="floorplan_show_edit" style="display: none"
+		title="Floor Plan">
+		<form onsubmit="createFloorplan(this); return false;"
+			onreset="hideFloorplanForm()">
+			<input type="hidden" id="floorplan_id" name="floorplan_id" value="" />
+			<p>
+				<label for="name">Name:</label><br /> <input id="name" name="name"
+					type="text" size="40" />
+			</p>
+			<p>
+				<label for="comment">Comment:</label><br />
+				<textarea id="comment" name="comment" cols="40" rows="5"></textarea>
+			</p>
+			<p class="forCreate forEdit">
+				<input id='file' name="file" type="file" />
+				<input id='filename' name='filename' type="hidden" />
+			</p>
+			<p class="forCreate forEdit">
+				<label for="group">Group Name:</label><input id="group"
+					name="group" type="text" />
+			</p>
+			<p class="forCreate forEdit">
+				<label for="floor">Floor:</label><input id="floor"
+					name="floor" type="number" />
+			</p>
+			<p class="forCreate forEdit">
+				<label for="origin_x">Origin X:</label> <input id="origin_x"
+					name="origin_x" type="text" /><br /> 
+				<label for="origin_y">Origin Y:</label> <input id="origin_y"
+					name="origin_y" type="text" />
+			</p>
+			<p class="forCreate forEdit">
+				<label for="ppm_x">PPM X:</label><input id="ppm_x"
+					name="ppm_x" type="text" /><br /> 
+				<label for="ppm_y">PPM Y:</label><input id="ppm_y"
+					name="ppm_y" type="text" />
+			</p>
+			<p>
+				<input type="submit" /> <input type="reset" value="Cancel" />
+			</p>
+		</form>
+	</div>
+	
+	<div class="">
+		<h1 class="ui-widget-header">Floor Plan</h1>
+		<div id="menu"></div>
+		<div id="mapdiv"
+			style="width: 1100px; height: 750px; border: 1px solid black; position: relative;"></div>
+	</div>
+	
+	
+	
+	<div class="">
+		<h1 class="ui-widget-header">Anchor</h1>
+		<div id="menu2">
+		Latitude:<input type="number" id="latitude" step="0.000001"></input>
+		Longitude:<input type="number" id="longitude" step="0.000001"></input>
+		Rotate:<input type="number" id="rotate" step="0.1" min="-180" max="180"></input>
+		Opacity:<input type="number" id="opacity" step="0.05" min="0" max="1" value="0.8"></input>
+		<select multiple id="overlays"></select>
+		<button id="save">Save</button>
+		</div>
+		<div id="mapdiv2"
+			style="width: 1100px; height: 750px; border: 1px solid black; position: relative;"></div>
+	</div>
+	
+	
+	
+</body>
+</html>

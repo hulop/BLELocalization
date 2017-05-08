@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <urlrewrite>
-
 	<rule>
 		<from>^/location/beacons/([^/]+)/(.+)$</from>
 		<to>/location/beacons?action=$1&amp;user_id=$2</to>
@@ -10,6 +9,19 @@
 		<from>^/location/beacons/(.+)$</from>
 		<to>/location/beacons?user_id=$1</to>
 	</rule>
-	
-</urlrewrite>
 
+	<rule>
+		<from>^/data/([^/]+)/?$</from>
+		<to>/data?type=$1</to>
+	</rule>
+
+	<rule>
+		<from>^/data/([^/]+)/([^/]+)/?$</from>
+		<to>/data?type=$1&amp;id=$2</to>
+	</rule>
+
+	<rule>
+		<from>^/data/([^/]+)/(.+)$</from>
+		<to>/data?type=$1&amp;id=$2</to>
+	</rule>
+</urlrewrite>

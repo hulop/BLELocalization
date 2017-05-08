@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<!----------------------------------------------------------------------------
+Copyright (c) 2014, 2015 IBM Corporation
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+------------------------------------------------------------------------------>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Switch DB</title>
+<script type="text/javascript"
+	src="js/lib/jquery/jquery-1.11.2.min.js"></script>
+<link rel="stylesheet" type="text/css"
+	href="js/lib/jquery-ui-1.11.4/jquery-ui.min.css">
+<script type="text/javascript"
+	src="js/lib/jquery-ui-1.11.4/jquery-ui.min.js"></script>
+<link rel="stylesheet" type="text/css"
+	href="js/lib/DataTables-1.10.6/media/css/jquery.dataTables.css">
+<script type="text/javascript"
+	src="js/lib/DataTables-1.10.6/media/js/jquery.dataTables.min.js"></script>
+<link rel="stylesheet" type="text/css"
+	href="js/lib/OpenLayers-2.13.1/theme/default/style.css">
+<script type="text/javascript"
+	src="js/lib/OpenLayers-2.13.1/OpenLayers.js"></script>
+<style type="text/css">
+.ui-button-text-only .ui-button-text {
+	padding: 2px 6px;
+	font-size: 16px;
+	font-weight: normal;
+}
+</style>
+<script type="text/javascript" src="/LocationService/js/datautils.js"></script>
+<script type="text/javascript" src="/LocationService/js/mapview.js"></script>
+<script type="text/javascript" src="/LocationService/js/floorplan_editor.js"></script>
+<script>
+
+var dbsDataType = "dbs";
+
+$(document).ready(function() {
+	refresh();
+});
+
+
+function refresh() {
+	refreshDBTable();
+}
+
+function refreshDBTable() {
+	$('#data_table').empty();
+	var query = {};
+
+	$.ajax({
+		url: dbsDataType,
+		dataType: "json",
+		success: function(data) {
+			console.log(data);
+			createDBTable(data).appendTo("#data_table").dataTable();
+		}
+	})
+}
+
+
+function createDBTable(data) {
+	var table = $('<table>', {
+		'class' : 'display',
+		'cellpadding' : 0,
+		'cellspacing' : 0,
+		'border' : 0,
+		'data-order' : '[[ 0, "desc" ]]'
+	});
+	var head = createTableRow([ 'name', 'action'], '<th>');
+	$('<thead>').append(head).appendTo(table);
+	var tbody = $('<tbody>').appendTo(table);
+	$('<tfoot>').append(head.clone()).appendTo(table);
+	var total = 0;
+	data.forEach(function(obj, i) {
+		var name = obj;
+		var actions = $('<span>', {
+			'css' : {
+				'white-space' : 'nowrap'
+			}
+		});
+
+		actions.append(createButton('choose', function() {
+			$.ajax({
+				url:dbsDataType+"?name="+name,
+				method: "POST",
+				success: function(data) {
+					alert(data);
+				}
+			})
+		}));
+		
+		tbody.append(createTableRow([name, actions ], '<td>'));
+	});
+	
+	var newInput = $("<input>").attr("id", "newname").attr("type","text");
+	var newAdd = $("<button>").text("add").button().click(function() {
+		$.ajax({
+			url:dbsDataType+"?name="+newInput.val(),
+			method: "POST",
+			success: function(data) {
+				alert(data);
+				refreshDBTable();
+			}
+		})	
+	});
+	
+	tbody.append(createTableRow([newInput,newAdd], '<td>'));
+
+	return table;
+}
+
+var buttons = {}, links = {}, images = {};
+
+function createButton(text, onclick) {
+	return (buttons[text] = buttons[text] || $('<button>', {
+		'text' : text
+	}).button()).clone().on('click', onclick);
+}
+
+function createImage(src) {
+	return (images[src] = images[src] || $('<img>', {
+		'src' : src,
+		'height': '60px'
+	}));
+}
+
+function createLink(text, href) {
+	return (links[text] = links[text] || $('<a>', {
+		'text' : text,
+		'target' : '_blank'
+	}).button()).clone().attr('href', href);
+}
+
+function createTableRow(array, tag) {
+	var row = $('<tr>');
+	array.forEach(function(col) {
+		row.append($(tag).append(col));
+	});
+	//		row.find('button,a').button();
+	return row;
+}
+
+
+</script>
+</head>
+<body>
+	<a href="sampling.html">Manage Samplings</a><br>
+	<a href="floorplans.html">Manage Floor plans</a>
+	<div class="floorplan_hide_edit ref_hide_edit">
+		<h1 class="ui-widget-header">DBs</h1>
+		<div style="margin-top: -10px; margin-bottom: 10px;">
+		</div>
+		<div class="ui-widget-content" id="data_table"></div>
+	</div>
+	
+</body>
+</html>

@@ -37,6 +37,11 @@ The localization algorithm is based on Monte Carlo localization using a particle
 - [Apache Commons Math 3.3](commons.apache.org/proper/commons-math) (Apache License 2.0)
 - [Apache Wink 1.4](https://wink.apache.org/) (Apache License 2.0)
 
+
+## library locations
+- location-service-library/lib/
+ - commons-math3-3.3.jar
+ - wink-1.4.jar
 -----
 
 # Sample Web API
@@ -133,6 +138,20 @@ In this section, Eclipse is used to explain how to run the sample web app.
 ## Dependent libraries for Web app
 - [jQuery 1.11.2](https://jquery.com/) (MIT License)
 - [OpenLayers 2.13.1](http://openlayers.org/two/) (BSD License)
+- [jQuery-UI 1.11.4](https://jqueryui.com/)
+- [DataTables 1.10.6](https://datatables.net/)
+- [mongo-java-driver 2.12.0](https://github.com/mongodb/mongo-java-driver)
+
+### library locations
+- LocationService/WebContent/js/lib/
+ - jquery/jquery-1.11.2.js
+ - jquery/jquery-1.11.2.min.js
+ - OpenLayers-2.13.1/
+ - jquery-ui-1.11.4/
+ - DataTables-1.10.6/
+ 
+- LocationService/WebContent/WEB-INF/lib
+ - mongo-java-driver-2.12.0.jar
 
 ## Launch and use the sample app
 ### Setup
@@ -249,3 +268,9 @@ In this sample app, an editor to create a virtual room where beacons and walls a
 1. Write a setting JSON file to define names of files to be generated. An example is provided in location-service-library/example directory.
 - Generate synthetic data by running SyntheticDataGenerator in location-service-library with arguments as follows: ``SyntheticDataGenerator -i  <PATH_TO_SETING_FILE>/<SETTING_FILE_NAME>.json``
 Generated data will be saved to a directory designated by the setting file.
+
+
+# Fingerprinting Management
+
+TBD
+
