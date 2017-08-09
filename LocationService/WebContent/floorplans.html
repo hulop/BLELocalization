@@ -446,8 +446,8 @@ function showMapOnGlobal(opt) {
 				}));
 			}
 
-			var image = new Image();
-			image.src = 'data/file?id=' + obj.filename;
+			//var image = new Image();
+			var src = 'data/file?id=' + obj.filename;
 
 			actions.append(createButton('map', function() {
 				console.log([ "showMap", obj ]);
@@ -463,7 +463,7 @@ function showMapOnGlobal(opt) {
 						analyze(obj);
 					}));
 
-			var img = createImage(image.src);
+			var img = createThumbImage(src);
 			var num = 0, area = 0;
 			if (obj.beacons) {
 				num = obj.beacons.features.filter(function(a) {
@@ -546,12 +546,54 @@ function showMapOnGlobal(opt) {
 			'text' : text
 		}).button()).clone().on('click', onclick);
 	}
-
+	var shrinking = false;
+	var canvas = null;
+	function shrinkImages() {
+		if (shrinking) {
+			return;
+		}
+		shrinking = true;
+		for(var key in images) {
+			if (!images[key].attr("src")) {
+				var img = new Image();
+				img.src = key;
+				console.log("loading "+key);
+				img.onload=function() {
+					if (!canvas) {
+						canvas = $('<canvas>');
+					}
+					var height = 300;
+					var scale = height / img.height;
+					var width = img.width * scale;
+					canvas[0].width = width;
+					canvas[0].height = height;
+					var ctx = canvas[0].getContext("2d");
+					ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, width, height);
+					console.log(canvas[0].toDataURL());
+					images[key].attr("src", canvas[0].toDataURL());	
+					shrinking = false;
+					shrinkImages();
+				}
+				break;
+			}
+		}
+	}
 	function createImage(src) {
-		return (images[src] = images[src] || $('<img>', {
+		$img = $('<img>', {
 			'src' : src,
 			'height' : '60px'
-		}));
+		});
+		images[src] = $img;
+		return $img;
+	}
+	function createThumbImage(src) {
+		$img = $('<img>', {
+			'src' : '',
+			'height' : '60px'
+		});
+		images[src] = $img;
+		shrinkImages()
+		return $img;
 	}
 
 	function createLink(text, href) {
@@ -718,10 +760,10 @@ function showMapOnGlobal(opt) {
 	
 	function exportFloorplans() {
 		function normalizelat(deg) {
-			while(deg < 0) {
+			while(deg < -180) {
 				deg += 360;
 			}
-			while(deg > 360) {
+			while(deg > 180) {
 				deg -= 360;
 			}
 			return deg;
@@ -730,19 +772,18 @@ function showMapOnGlobal(opt) {
 		var temp = [];
 		floorplans.forEach(function(fp) {
 			console.log(fp);
-			
 			temp.push({
 				rotate: fp.rotate,
-				floor: fp.floor,
-				image: "http://"+location.host+"/LocationService/data/file/"+fp.filename,
+				floor: fp.floor<0?fp.floor:fp.floor+1,
+				image: "https://"+location.host+"/LocationService/data/file/"+fp.filename,
 				height: fp.height,
 				width: fp.width,
 				ppm_y: fp.ppm_x,
 				ppm_x: fp.ppm_y,
 				origin_y: fp.origin_y || fp.height/2,
 				origin_x: fp.origin_x || fp.width/2,
-				lat: fp.lat,
-				lng: normalizelat(fp.lng),
+				lat: fp.lat-0,
+				lng: normalizelat(fp.lng-0),
 				id: fp._metadata.name+"-"+fp.filename
 			});
 		});
