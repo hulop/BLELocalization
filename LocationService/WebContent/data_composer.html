@@ -50,7 +50,7 @@ var samplings;
 var refpoints, refpointsMap;
 var floorplans, floorplansMap;
 var refpointsSamplingsMap;
-var floorplanRefpointMap;
+var refpointFloorplanMap;
 var layers;
 
 var $status, timer;
@@ -84,7 +84,9 @@ $(document).ready(function() {
 			dataUtil.getData({
 				type: "refpoints",
 				success: function(response) {
-					refpoints = response;
+					refpoints = response.sort(function(a,b){
+						return a._metadata.name.localeCompare(b._metadata.name);
+					});
 					refpointsMap = {};
 					refpoints.forEach(function(rp) {
 						refpointsMap[rp._id.$oid] = rp;
@@ -101,9 +103,9 @@ $(document).ready(function() {
 								fp.image.src = "data/file/"+fp.filename;
 								floorplansMap[fp._id.$oid] = fp;
 							});
-							floorplanRefpointMap = {};
- 							refpoints.forEach(function(rp) {
- 								floorplanRefpointMap[rp.refid.$oid] = rp; 								
+							refpointFloorplanMap = {};
+							refpoints.forEach(function(rp) {
+								refpointFloorplanMap[rp._id.$oid] = floorplansMap[rp.refid.$oid];
 							});
  							layers = {};
  							var temp = $("<canvas>")[0];
@@ -155,7 +157,9 @@ function getAnchor(refpoint) {
 
 function convertSamplings(samplings, refpoint) {
 	var refids = $("input[type=checkbox]:checked").map(function(){return $(this).val()}).toArray();
-	return samplings.map(function(sp) {
+	return samplings.filter(function(sp){
+		return refids.indexOf(sp.information.refid.$oid) > -1;
+	}).map(function(sp) {
 		var local = {x:sp.information.absx,y:sp.information.absy};
 		var anchor1 = getAnchor(refpointsMap[sp.information.refid.$oid]);
 		var anchor2 = getAnchor(refpoint);
@@ -164,7 +168,7 @@ function convertSamplings(samplings, refpoint) {
 		var local2 = latlon2xy(global, anchor2);
 		var global2 = xy2latlon(local2, anchor2);
 		
-		var obj = $.extend({}, sp);
+		var obj = $.extend(true, {}, sp);
 		obj.information.x = local2.x;
 		obj.information.y = local2.y;
 		obj.information.absx = local2.x + refpoint.x;
@@ -172,8 +176,6 @@ function convertSamplings(samplings, refpoint) {
 		obj.information.lat = global2.lat;
 		obj.information.lng = global2.lon;
 		return obj;
-	}).filter(function(sp){
-		return refids.indexOf(sp.information.refid.$oid) > -1;
 	});
 }
 
@@ -215,17 +217,19 @@ function csvSamplings(samplings, refpoint) {
 	return csv.join("");
 }
 
-function convertBeacons(floorplans, refpoint) {
+function convertBeacons(refpoints, refpoint) {
 	var beacons = [];
 	var refids = $("input[type=checkbox]:checked").map(function(){return $(this).val()}).toArray();
-	floorplans.filter(function(fp){
-		var fpid = floorplanRefpointMap[fp._id.$oid]._id.$oid;
-		return refids.indexOf(fpid) > -1;
-	}).forEach(function(fp) {
+	refpoints.filter(function(rp){
+		return refids.indexOf(rp._id.$oid) > -1;
+	}).forEach(function(rp) {
+		var fp = refpointFloorplanMap[rp._id.$oid];
+		
 		if (fp.beacons && fp.beacons.features) {
 			fp.beacons.features.forEach(function(b) {
+				if (b.properties.type != "beacon") return;
 				var local = {x:b.geometry.coordinates[0], y:b.geometry.coordinates[1]};
-				var anchor1 = getAnchor(floorplanRefpointMap[fp._id.$oid]);
+				var anchor1 = getAnchor(rp);
 				var	anchor2 = getAnchor(refpoint);
 				
 				var global = xy2latlon(local, anchor1);
@@ -237,15 +241,23 @@ function convertBeacons(floorplans, refpoint) {
 					y: local2.y,
 					z: 0,
 					floor: fp.floor,
-					uuid:b.properties.uuid,
+					uuid:b.properties.uuid.toLowerCase(),
 					major:b.properties.major,
 					minor:b.properties.minor,
 					power:b.properties.power
 				});
 			});
 		}
-	})
-	return beacons;
+	});
+	var uniq = {};
+	return beacons.filter(function(b) {
+		var id = b.uuid.toLowerCase()+"-"+b.major+"-"+b.minor+"-"+b.x+"-"+b.y+"-"+b.floor;
+		if (uniq[id]) {
+			return false;
+		}
+		uniq[id] = b;
+		return true;
+	});
 }
 
 function csvBeacons(beacons) {
@@ -254,12 +266,26 @@ function csvBeacons(beacons) {
 	}).join("");
 }
 
+function filterRefpoints() {
+	var text = $("#refFilterText").val();
+	$("#refpoints_table tr:nth-child(n+2)").map(function(i, tr) {
+		var b = text=="" || $(tr).find("td:nth(1)").text().match(text);
+		$(tr).css("opacity",b?1.0:0.5);
+		$(tr).find("input[type=checkbox]").attr("disabled",!b);
+	});
+}
+
 function generateTable(fps) {
 	$("#left").empty();
 	$("#right").empty();
 	
 	var $div0 = $("<div>").appendTo($("#left")).append("<strong>Floor Plans</strong>");
-	var $table = $("<table>").appendTo($div0);
+	$div0.append("<button id='select_all' onclick='$(\"input[type=checkbox]:not(:checked):not(:disabled)\").map(function(){return $(this).click()})'>Select all</button>");
+	$div0.append("<button id='unselect_all' onclick='$(\"input[type=checkbox]:checked:not(:disabled)\").map(function(){return $(this).click()})'>Unselect all</button>");
+	$div0.append("<input id='refFilterText' type='text' onkeyup='filterRefpoints();'>");
+	$div0.append("<button onclick='$(\"#refFilterText\").val(\"\");filterRefpoints();'>clear</button>")
+	
+	var $table = $("<table id='refpoints_table'>").appendTo($div0);
 	
 	generateTR(["Export","Floor plan","#Samples", "#Beacons", "Anchor for export"]).appendTo($table);
 	fps.forEach(function(fp) {
@@ -320,7 +346,7 @@ function generateTable(fps) {
 			alert("Need to select an anchor of floor plan for export");
 			return null;
 		}
-		return convertBeacons(floorplans, refpointsMap[refid]);
+		return convertBeacons(refpoints, refpointsMap[refid]);
 	}
 	$button.click(function() {
 		var converted = convertedBeacons();
@@ -404,7 +430,7 @@ function composeData() {
 	var refid = $("input[name=anchor]:checked").val();
 	var refpoint = refpointsMap[refid];
 	var samples = csvSamplings(convertSamplings(samplings, refpoint));
-	var beacons = csvBeacons(convertBeacons(floorplans, refpoint));
+	var beacons = csvBeacons(convertBeacons(refpoints, refpoint));
 	var temp = [];
 	Object.keys(layers).sort().forEach(function(key) {
 		temp.push(layers[key]);
@@ -505,6 +531,8 @@ function generateMMImage(layer, geojson, refpoint) {
 		var info = s.information;
 		if (info.floor_num == layer.floor_num) {
 			var local = info;			
+			if (!refpointsMap[info.refid.$oid]) {return}
+			
 			var anchor2 = getAnchor(refpointsMap[info.refid.$oid]); 
 			var global = xy2latlon(local, anchor2)
 			var local2 = latlon2xy(global, anchor);
