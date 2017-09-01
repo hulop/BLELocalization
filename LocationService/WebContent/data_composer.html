@@ -149,9 +149,9 @@ $(document).ready(function() {
 
 function getAnchor(refpoint) {
 	return {
-		lat:refpoint.anchor_lat,
-		lon:refpoint.anchor_lng, 
-		rotate:refpoint.anchor_rotate
+		lat:parseFloat(refpoint.anchor_lat),
+		lon:parseFloat(refpoint.anchor_lng), 
+		rotate:parseFloat(refpoint.anchor_rotate)
 	};
 }
 
@@ -437,9 +437,9 @@ function composeData() {
 	});
 	var json = {
 			anchor: {
-				latitude: refpoint.anchor_lat,
-				longitude: refpoint.anchor_lng,
-				rotate: refpoint.anchor_rotate
+				latitude:parseFloat(refpoint.anchor_lat),
+				longitude:parseFloat(refpoint.anchor_lng), 
+				rotate:parseFloat(refpoint.anchor_rotate)
 			},
 			samples: [{
 				data:samples
@@ -499,10 +499,11 @@ function generateMMImage(layer, geojson, refpoint) {
 	canvas2.height = height;
 	var ctx2 = canvas2.getContext("2d");
 	ctx2.save();
-	ctx2.fillStyle = "white";
+	ctx2.fillStyle = "black";
 	ctx2.fillRect(0,0,width,height);	
 	ctx2.scale(ppm, ppm);
 	
+	/*
 	floorplans.forEach(function(fp) {
 		var f = parseInt(fp.floor);
 		if (f != layer.floor_num) {
@@ -523,6 +524,7 @@ function generateMMImage(layer, geojson, refpoint) {
 		ctx2.drawImage(fp.image, 0, 0, fp.width, fp.height, 0, 0, fp.width/fp.ppm_x, fp.height/fp.ppm_y);
 		ctx2.restore();
 	});
+	*/
 	ctx2.restore();
 	ctx2.save();
 	ctx2.translate(originx, originy);
@@ -537,7 +539,7 @@ function generateMMImage(layer, geojson, refpoint) {
 			var global = xy2latlon(local, anchor2)
 			var local2 = latlon2xy(global, anchor);
 
-			ctx2.globalAlpha = 0.2;
+			ctx2.globalAlpha = 0.01;
 			ctx2.fillStyle = "blue";
 			ctx2.beginPath();
 			ctx2.moveTo(local2.x, local2.y);
@@ -555,6 +557,7 @@ function generateMMImage(layer, geojson, refpoint) {
 	ctx.clearRect(0,0,width,height);	
 	ctx.translate(originx, originy);
 	ctx.scale(ppm, -ppm);
+	/*
 	geojson.features.forEach(function(f) {
 		if (f.properties["リンクID"]) {
 			var s = nodeMap[f.properties["起点ノードID"]];
@@ -578,10 +581,23 @@ function generateMMImage(layer, geojson, refpoint) {
 			}
 		}
 	});
+	*/
+	var entMap = {};
+	geojson.features.forEach(function(f) {
+		if(f.properties["出入口ID"]) {
+			entMap[f.properties["対応ノードID"]] = true; 
+		}		
+	});
+	
 	geojson.features.forEach(function(f) {
 		if (f.properties["リンクID"]) {
 			var s = nodeMap[f.properties["起点ノードID"]];
 			var t = nodeMap[f.properties["終点ノードID"]];
+			
+			if ((entMap[f.properties["起点ノードID"]] || entMap[f.properties["終点ノードID"]]) && parseFloat(f.properties["リンク延長"]) < 3) {
+				return;
+			}
+			
 			var height = parseInt(s.properties["高さ"]);
 			height = height<1?height:height-1;
 			if (s.properties["高さ"] == t.properties["高さ"] &&
@@ -590,8 +606,8 @@ function generateMMImage(layer, geojson, refpoint) {
 				var gt = {lon:t.geometry.coordinates[0], lat:t.geometry.coordinates[1]};
 				var ls = latlon2xy(gs, anchor);	
 				var lt = latlon2xy(gt, anchor);
-				ctx.globalCompositeOperation = "destination-out";
-				ctx.lineWidth = 4;
+				//ctx.globalCompositeOperation = "destination-out";
+				ctx.lineWidth = 3;
 				if (f.properties["有効幅員"] == "0") {
 					ctx.lineWidth = 1;
 				} else if (f.properties["有効幅員"] == "1") {

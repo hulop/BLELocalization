@@ -77,9 +77,9 @@ function showAnchorMap() {
 				'_id' : _obj._id
 			}, update = {
 				'$set' : {
-					'lat' : _obj.lat,
-					'lng' : _obj.lng,
-					'rotate' : _obj.rotate
+					'lat' : parseFloat(_obj.lat),
+					'lng' : parseFloat(_obj.lng),
+					'rotate' : parseFloat(_obj.rotate)
 				}
 			};
 	  
@@ -569,7 +569,7 @@ function showMapOnGlobal(opt) {
 					canvas[0].height = height;
 					var ctx = canvas[0].getContext("2d");
 					ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, width, height);
-					console.log(canvas[0].toDataURL());
+					//console.log(canvas[0].toDataURL());
 					images[key].attr("src", canvas[0].toDataURL());	
 					shrinking = false;
 					shrinkImages();
