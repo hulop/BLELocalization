@@ -812,6 +812,64 @@ function showMapOnGlobal(opt) {
 		    document.body.removeChild(link);
 		  }
 		}
+	
+	function findBeacon() {
+		var id = $("#findBeacon").val();
+		var major = parseInt(id.split("-")[0]);
+		var minor = parseInt(id.split("-")[1]);
+		var str = "";		
+		floorplans.forEach(function(fp) {			
+			if (fp.beacons) {
+				fp.beacons.features.forEach(function(f) {
+					if (f.properties && f.properties.type == "beacon") {
+						if (f.properties.major == major && f.properties.minor == minor) {
+							str += `${fp.group}-${fp.floor>=0?(fp.floor+1)+"F":"B"+(-fp.floor)+"F"}: `;
+							str += `(${f.geometry.coordinates[0]}, ${f.geometry.coordinates[1]})\n`;
+						} 
+					}
+				});
+			}
+		});
+		$("#findBeaconResult").html("<pre>"+str+"</pre>");
+	}
+	function findDupBeacons() {
+		//var beacons = []; 
+		var beaconMap = {};
+		floorplans.forEach(function(fp) {			
+			if (fp.beacons) {
+				fp.beacons.features.forEach(function(f) {
+					if (f.properties && f.properties.type == "beacon") {
+						var beacon = {
+							uuid: f.properties.uuid,
+							major: f.properties.major,
+							minor: f.properties.minor,
+							x: f.geometry.coordinates[0],
+							y: f.geometry.coordinates[1],
+							floorplan: `${fp.group}-${fp.floor>=0?(fp.floor+1)+"F":"B"+(-fp.floor)+"F"}`
+						};
+						//beacons.push(beacon);
+						var key = beacon.major+"-"+beacon.minor;
+						var temp = beaconMap[key];
+						if (!temp) {
+							temp = [];
+							beaconMap[key] = temp;
+						}
+						temp.push(beacon);
+					}
+				});
+			}
+		});
+		var str = "";
+		for(var k in beaconMap) {
+			var beacons = beaconMap[k];
+			if (beacons.length > 1) {
+				beacons.forEach(function(b) {
+					str += `${b.floorplan}[${b.major}-${b.minor}]: (${b.x}, ${b.y})\n`;
+				});
+			}
+		}
+		$("#findBeaconResult").html("<pre>"+str+"</pre>");
+	}
 </script>
 </head>
 <body>
@@ -825,6 +883,10 @@ function showMapOnGlobal(opt) {
 				filter</button>
 				
 			<button id="exportFloorplans" onclick="exportFloorplans()">Export for MapServer</button>
+			<input type="text" id="findBeacon" placeholder="major-minor"></input>
+			<button id="findBeaconBtn" onclick="findBeacon()">Find Beacon</button>
+			<button id="findDupBeacons" onclick="findDupBeacons()">Find Duplicated Beacons</button>
+			<div id="findBeaconResult"></div>
 		</div>
 		<div class="ui-widget-content" id="data_table"></div>
 	</div>
