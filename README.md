@@ -21,6 +21,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 -->
 
+**BLELocalization has two functions: web api and fingerprint data management.  
+Now we are refactoring them and web api woulbe be deprecated (use iOS framework or c++ runtime).  
+We are planning to update this page soon.**
 
 # BLE Localization
 
