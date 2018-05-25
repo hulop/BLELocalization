@@ -24,6 +24,7 @@ import javax.servlet.http.Part;
 import org.apache.commons.math3.stat.descriptive.moment.GeometricMean;
 import org.bson.types.ObjectId;
 
+import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
@@ -267,6 +268,19 @@ public class DataServlet extends HttpServlet {
 			response.sendError(HttpServletResponse.SC_BAD_REQUEST, "No data specified");
 			return;
 		}
+		if (data instanceof BasicDBList) {
+			for (Object o : (BasicDBList)data) {
+				postData((DBObject)o, type, mCollRef, mCollSamp, collection);	
+			}
+		} else {
+			postData(data, type, mCollRef, mCollSamp, collection);
+		}
+		mDS.sendJSON(data, request, response);
+		response.setStatus(HttpServletResponse.SC_OK);
+		response.getOutputStream().close();
+	}
+	
+	private void postData(DBObject data, String type, DBCollection mCollRef, DBCollection mCollSamp, DBCollection collection) {
 		Object dataID = data.get("_id");
 		if (dataID != null && collection.findOne(dataID) != null) {
 			// response.sendError(HttpServletResponse.SC_BAD_REQUEST,
@@ -278,12 +292,9 @@ public class DataServlet extends HttpServlet {
 			updateSamplingData(data);
 		}
 		collection.save(data);
-		mDS.sendJSON(data, request, response);
 		if ("refpoints".equals(type) && dataID != null) {
 			onRefpointChange(new BasicDBObject("_id", dataID));
 		}
-		response.setStatus(HttpServletResponse.SC_OK);
-		response.getOutputStream().close();
 	}
 
 	/**
@@ -417,16 +428,19 @@ public class DataServlet extends HttpServlet {
 			System.out.println(name + ": " + request.getParameter(name));
 		}
 		DBObject data = getDBObject(request, "data");
-		if (!(data instanceof BasicDBObject)) {
-			return null;
-		}
 		if (data != null) {
 			DBObject md = getDBObject(request, "_metadata");
 			if (md == null) {
 				md = new BasicDBObject();
 			}
 			md.put("created_at", new Date());
-			data.put("_metadata", md);
+			if (data instanceof BasicDBObject) {
+				data.put("_metadata", md);
+			} else if (data instanceof BasicDBList) {
+				for (Object o : (BasicDBList)data) {
+					((DBObject)o).put("_metadata", md);
+				}
+			}
 		}
 		return data;
 	}
