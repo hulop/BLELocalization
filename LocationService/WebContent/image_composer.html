@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<!----------------------------------------------------------------------------
+Copyright (c) 2018 IBM Corporation, Carnegie Mellon University and others
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+------------------------------------------------------------------------------>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Sampling data manager</title>
+<script type="text/javascript"
+	src="js/lib/jquery/jquery-1.11.2.min.js"></script>
+<script type="text/javascript" src="js/datautils.js"></script>
+<script type="text/javascript"
+	src="js/lib/OpenLayers-2.13.1/OpenLayers.js"></script>
+<script type="text/javascript" src="js/util.js"></script>
+<style>
+table {
+border:1px solid gray;
+border-collapse: collapse;
+}
+table td {
+border: 1px solid gray;
+padding: 2px;
+}
+div#left, div#right {
+width:50%;
+float:left;
+}
+strong {
+margin: 5px 0px;
+display: block;
+}
+</style>
+<script type="text/javascript">
+var refpoints, refpointsMap;
+var floorplans, floorplansMap;
+
+var $status, timer;
+function showStatus(text) {
+	if (timer) clearInterval(timer);
+	if (!$status) $status = $("<div>").appendTo(document.body);
+	$status.text(text?text:"");
+	if (text) {
+		timer = setInterval(function() {
+			$status.text($status.text()+".");
+		}, 500);
+	}
+}
+
+$(document).ready(function() {
+	showStatus("loading refpoints");
+	dataUtil.getData({
+		type: "refpoints",
+		success: function(response) {
+			refpoints = response.sort(function(a,b){
+				return a._metadata.name.localeCompare(b._metadata.name);
+			});
+			refpointsMap = {};
+			refpoints.forEach(function(rp) {
+				refpointsMap[rp._id.$oid] = rp;
+			});
+				
+			showStatus("loading floorplans");
+			dataUtil.getData({
+				type: "floorplans",
+				success: function(response) {
+					floorplansMap = {};
+					floorplans = response;
+					floorplans.forEach(function(fp) {
+						fp.image = new Image();
+						fp.image.src = "data/file/"+fp.filename;
+						floorplansMap[fp._id.$oid] = fp;
+					});
+					refpointFloorplanMap = {};
+					refpoints.forEach(function(rp) {
+						refpointFloorplanMap[rp._id.$oid] = floorplansMap[rp.refid.$oid];
+					});
+					showStatus();
+					generateTable(refpoints);
+				}
+			});
+		}
+	});
+	floorplans = [];
+	refpoints = [];
+	generateTable([]);
+});
+
+function getAnchor(refpoint) {
+	return {
+		lat:parseFloat(refpoint.anchor_lat),
+		lon:parseFloat(refpoint.anchor_lng), 
+		rotate:parseFloat(refpoint.anchor_rotate)
+	};
+}
+
+function filterRefpoints() {
+	var text = $("#refFilterText").val();
+	$("#refpoints_table tr:nth-child(n+2)").map(function(i, tr) {
+		var b = text=="" || $(tr).find("td:nth(1)").text().match(text);
+		$(tr).css("opacity",b?1.0:0.5);
+		$(tr).find("input[type=checkbox]").attr("disabled",!b);
+	});
+}
+
+function generateTable(fps) {
+	$("#left").empty();
+	$("#right").empty();
+	
+	var $div0 = $("<div>").appendTo($("#left")).append("<strong>Floor Plans</strong>");
+	$div0.append("<button id='select_all' onclick='$(\"input[type=checkbox]:not(:checked):not(:disabled)\").map(function(){return $(this).click()})'>Select all</button>");
+	$div0.append("<button id='unselect_all' onclick='$(\"input[type=checkbox]:checked:not(:disabled)\").map(function(){return $(this).click()})'>Unselect all</button>");
+	$div0.append("<input id='refFilterText' type='text' onkeyup='filterRefpoints();'>");
+	$div0.append("<button onclick='$(\"#refFilterText\").val(\"\");filterRefpoints();'>clear</button>")
+	
+	var $table = $("<table id='refpoints_table'>").appendTo($div0);
+	
+	generateTR(["Export","Floor plan","Anchor for export"]).appendTo($table);
+	fps.forEach(function(fp) {
+		var $check = $("<input type='checkbox'>").val(fp._id.$oid).attr("checked","checked");
+		
+		var $label = $("<label>").attr("for", fp._id.$oid).text(fp._metadata.name);
+			
+		var $radio = $("<input type='radio'>").attr("name", "anchor").val(fp._id.$oid);
+		
+		generateTR([$check, $label, $radio]).appendTo($table);
+	});
+		
+	var $div4 = $("<div>").appendTo($("#right")).append("<strong>Image Sample Anchors</strong>");
+	var $exbtn = $("<button>").text("Export").css("font-size", "200%").appendTo($div4);
+	$exbtn.click(function() {
+		var refid = $("input[name=anchor]:checked").val();
+		if (!refid) {
+			alert("Need to select an anchor of floor plan for export");
+			return;
+		}
+		composeData();
+	});
+}
+
+function composeData() {
+	var refid = $("input[name=anchor]:checked").val();
+	var refpoint = refpointsMap[refid];
+	var sampleAnchors = [];
+	Object.keys(refpointsMap).sort().forEach(function(key) {
+		anchor = {
+				name:refpointsMap[key]._metadata.name,
+				latitude:parseFloat(refpointsMap[key].anchor_lat),
+				longitude:parseFloat(refpointsMap[key].anchor_lng), 
+				rotate:parseFloat(refpointsMap[key].anchor_rotate)
+		};
+		sampleAnchors.push(anchor);
+	});
+	var json = {
+			anchor: {
+				name:refpoint._metadata.name,
+				latitude:parseFloat(refpoint.anchor_lat),
+				longitude:parseFloat(refpoint.anchor_lng), 
+				rotate:parseFloat(refpoint.anchor_rotate)
+			},
+			imageSampleAnchors: sampleAnchors
+	};
+	downloadFile(JSON.stringify(json), "json", "imageSampleAnchors.json");
+}
+
+function generateTR(list) {
+	var $tr = $("<tr>");
+	list.forEach(function(item) {
+		$("<td>").append(item).appendTo($tr);		
+	});
+	return $tr;
+}
+
+function downloadFile(data, type, filename) {  
+	var mime = "text/plain";
+	if (type == "json") mime = 'text/json;charset=utf-8;';
+	if (type == "csv") mime = 'text/comma-separated-values';
+	
+	  var blob = new Blob([data], { type: mime });
+	  if (navigator.msSaveBlob) {
+	    navigator.msSaveBlob(blob, filename);
+	  } else {
+	    var link = document.createElement("a");
+	    if (link.download !== undefined) {
+	      var url = URL.createObjectURL(blob);
+	      link.setAttribute("href", url);
+	      link.setAttribute("download", filename);
+	    } else {        
+	      link.href = `data:attachment/${type},` + data;
+	    }
+	    link.style = "visibility:hidden";
+	    document.body.appendChild(link);
+	    link.click();
+	    document.body.removeChild(link);
+	  }
+	}
+</script>
+</head>
+<body>
+<div id="left"></div>
+<div id="right"></div>
+</body>
+</html>

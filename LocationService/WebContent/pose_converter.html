@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<!----------------------------------------------------------------------------
+Copyright (c) 2018 IBM Corporation, Carnegie Mellon University and others
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+------------------------------------------------------------------------------>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Sampling data manager</title>
+<script type="text/javascript"
+	src="js/lib/jquery/jquery-1.11.2.min.js"></script>
+<script type="text/javascript" src="js/datautils.js"></script>
+<script type="text/javascript"
+	src="js/lib/OpenLayers-2.13.1/OpenLayers.js"></script>
+<script type="text/javascript"
+	src="js/lib/three.js-r91/build/three.min.js"></script>
+<script type="text/javascript" src="js/util.js"></script>
+<style>
+table {
+border:1px solid gray;
+border-collapse: collapse;
+}
+table td {
+border: 1px solid gray;
+padding: 2px;
+}
+div#left, div#right {
+width:50%;
+float:left;
+}
+strong {
+margin: 5px 0px;
+display: block;
+}
+</style>
+<script type="text/javascript">
+var refpoints, refpointsMap;
+var floorplans, floorplansMap;
+
+var $status, timer;
+function showStatus(text) {
+	if (timer) clearInterval(timer);
+	if (!$status) $status = $("<div>").appendTo(document.body);
+	$status.text(text?text:"");
+	if (text) {
+		timer = setInterval(function() {
+			$status.text($status.text()+".");
+		}, 500);
+	}
+}
+
+$(document).ready(function() {
+	showStatus("loading refpoints");
+	dataUtil.getData({
+		type: "refpoints",
+		success: function(response) {
+			refpoints = response.sort(function(a,b){
+				return a._metadata.name.localeCompare(b._metadata.name);
+			});
+			refpointsMap = {};
+			refpoints.forEach(function(rp) {
+				refpointsMap[rp._id.$oid] = rp;
+			});
+				
+			showStatus("loading floorplans");
+			dataUtil.getData({
+				type: "floorplans",
+				success: function(response) {
+					floorplansMap = {};
+					floorplans = response;
+					floorplans.forEach(function(fp) {
+						fp.image = new Image();
+						fp.image.src = "data/file/"+fp.filename;
+						floorplansMap[fp._id.$oid] = fp;
+					});
+					refpointFloorplanMap = {};
+					refpoints.forEach(function(rp) {
+						refpointFloorplanMap[rp._id.$oid] = floorplansMap[rp.refid.$oid];
+					});
+					showStatus();
+					generateTable(refpoints);
+				}
+			});
+		}
+	});
+	floorplans = [];
+	refpoints = [];
+	generateTable([]);
+});
+
+function filterRefpoints() {
+	var text = $("#refFilterText").val();
+	$("#refpoints_table tr:nth-child(n+2)").map(function(i, tr) {
+		var b = text=="" || $(tr).find("td:nth(1)").text().match(text);
+		$(tr).css("opacity",b?1.0:0.5);
+		$(tr).find("input[type=checkbox]").attr("disabled",!b);
+	});
+}
+
+function getAnchor(refpoint) {
+	return {
+		lat:parseFloat(refpoint.anchor_lat),
+		lon:parseFloat(refpoint.anchor_lng), 
+		rotate:parseFloat(refpoint.anchor_rotate)
+	};
+}
+
+function convertSamplings(samplings, samplingsRefPoint, refpoint) {
+	return samplings.map(function(sp) {
+		var local = {x:sp.pose.position.x, y:sp.pose.position.y};
+		var anchor1 = getAnchor(samplingsRefPoint);
+		var anchor2 = getAnchor(refpoint);
+		
+		var global = xy2latlon(local, anchor1);
+		var local2 = latlon2xy(global, anchor2);
+		var global2 = xy2latlon(local2, anchor2);
+		
+		var obj = $.extend(true, {}, sp);
+		obj.pose.position.x = local2.x + refpoint.x;
+		obj.pose.position.y = local2.y + refpoint.y;
+		// export rotation information if sampling data has rotation
+		var local_quat = {qx:sp.pose.orientation.x, qy:sp.pose.orientation.y, qz:sp.pose.orientation.z,
+				qw:sp.pose.orientation.w};
+		if (local_quat.qx && local_quat.qy && local_quat.qz && local_quat.qw) {
+			var quat_from = new THREE.Quaternion().set(local_quat.qx, local_quat.qy, local_quat.qz, local_quat.qw).normalize();
+			// rotate direction of z-axis
+			var euler_from = 0.0;
+			var euler_to = headingLocalToGlobal(toDegrees(euler_from), anchor1);
+			euler_to = toRadians(headingGlobalToLocal(euler_to, anchor2));
+			quat_transform = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), euler_to).normalize();
+			quat_to = new THREE.Quaternion().multiplyQuaternions(quat_from, quat_transform).normalize();
+			
+			obj.pose.orientation.x = quat_to.x;
+			obj.pose.orientation.y = quat_to.y;
+			obj.pose.orientation.z = quat_to.z;
+			obj.pose.orientation.w = quat_to.w;
+		}
+		return obj;
+	});
+}
+
+function importFile(fileInput, checkImport) {
+	var file = fileInput.files[0];
+	if (!file) {
+		return;
+	}
+	
+	var fr = new FileReader();
+	fr.onload = function() {						
+		var input = JSON.parse(fr.result);		
+		if (!input.length || input.length == 0) {
+			return;
+		}
+		input = input.filter(function(i) {
+			return checkImport(i);
+		});	
+		if (input.length == 0) {
+			return;
+		}
+				
+		var dataid = $("input[name=data_floor]:checked").val();
+		var datapoint = refpointsMap[dataid];
+
+		var refid = $("input[name=anchor]:checked").val();
+		var refpoint = refpointsMap[refid];
+		converted = convertSamplings(input, datapoint, refpoint);
+		downloadFile(JSON.stringify(converted), "json", "poses_converted.json");		
+	}
+	fr.readAsText(file);
+}
+
+function importLidarFile() {
+	importFile($("#convert_lidar_file")[0], function(d) {
+		if (d.pose) {
+			return d;
+		}
+		return false;
+	});
+}
+
+function generateTable(fps) {
+	$("#left").empty();
+	$("#right").empty();
+	
+	var $div0 = $("<div>").appendTo($("#left")).append("<strong>Floor Plans</strong>");
+	$div0.append("<input id='refFilterText' type='text' onkeyup='filterRefpoints();'>");
+	$div0.append("<button onclick='$(\"#refFilterText\").val(\"\");filterRefpoints();'>clear</button>")
+	
+	var $table = $("<table id='refpoints_table'>").appendTo($div0);
+	
+	generateTR(["Input data floor","Floor plan","Anchor for convert"]).appendTo($table);
+	fps.forEach(function(fp) {
+		var $check = $("<input type='radio'>").attr("name", "data_floor").val(fp._id.$oid);
+		
+		var $label = $("<label>").attr("for", fp._id.$oid).text(fp._metadata.name);
+		
+		var $radio = $("<input type='radio'>").attr("name", "anchor").val(fp._id.$oid);
+		
+		generateTR([$check, $label, $radio]).appendTo($table);
+	});
+		
+	var $div4 = $("<div>").appendTo($("#right")).append("<strong>Convert Poses</strong>");
+	var $lidarfile = $("<input type='file' id='convert_lidar_file' style='display:none;' onchange='importLidarFile()'/>").appendTo($div4);
+	var $exbtn = $("<button>").text("Convert LiDAR Poses JSON").css("font-size", "100%").appendTo($div4);
+	$exbtn.click(function() {
+		var dataid = $("input[name=data_floor]:checked").val();
+		if (!dataid) {
+			alert("Need to select an input data floor");
+			return;
+		}
+		var refid = $("input[name=anchor]:checked").val();
+		if (!refid) {
+			alert("Need to select an anchor of floor plan for export");
+			return;
+		}
+		if (dataid==refid) {
+			alert("Input data floor and anchor floor should be different");
+			return;
+		}
+		$lidarfile.click();
+	});
+}
+
+function generateTR(list) {
+	var $tr = $("<tr>");
+	list.forEach(function(item) {
+		$("<td>").append(item).appendTo($tr);		
+	});
+	return $tr;
+}
+
+function downloadFile(data, type, filename) {  
+	var mime = "text/plain";
+	if (type == "json") mime = 'text/json;charset=utf-8;';
+	if (type == "csv") mime = 'text/comma-separated-values';
+	
+	  var blob = new Blob([data], { type: mime });
+	  if (navigator.msSaveBlob) {
+	    navigator.msSaveBlob(blob, filename);
+	  } else {
+	    var link = document.createElement("a");
+	    if (link.download !== undefined) {
+	      var url = URL.createObjectURL(blob);
+	      link.setAttribute("href", url);
+	      link.setAttribute("download", filename);
+	    } else {        
+	      link.href = `data:attachment/${type},` + data;
+	    }
+	    link.style = "visibility:hidden";
+	    document.body.appendChild(link);
+	    link.click();
+	    document.body.removeChild(link);
+	  }
+	}
+</script>
+</head>
+<body>
+<div id="left"></div>
+<div id="right"></div>
+</body>
+</html>

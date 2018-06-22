@@ -26,6 +26,8 @@ THE SOFTWARE.
 <script type="text/javascript" src="js/datautils.js"></script>
 <script type="text/javascript"
 	src="js/lib/OpenLayers-2.13.1/OpenLayers.js"></script>
+<script type="text/javascript"
+	src="js/lib/three.js-r91/build/three.min.js"></script>
 <script type="text/javascript" src="js/util.js"></script>
 <style>
 table {
@@ -160,7 +162,7 @@ function convertSamplings(samplings, refpoint) {
 	return samplings.filter(function(sp){
 		return refids.indexOf(sp.information.refid.$oid) > -1;
 	}).map(function(sp) {
-		var local = {x:sp.information.absx,y:sp.information.absy};
+		var local = {x:sp.information.absx, y:sp.information.absy};
 		var anchor1 = getAnchor(refpointsMap[sp.information.refid.$oid]);
 		var anchor2 = getAnchor(refpoint);
 		
@@ -175,6 +177,28 @@ function convertSamplings(samplings, refpoint) {
 		obj.information.absy = local2.y + refpoint.y;
 		obj.information.lat = global2.lat;
 		obj.information.lng = global2.lon;
+		// export rotation information if sampling data has rotation
+		var local_quat = {qx:sp.information.qx, qy:sp.information.qy, qz:sp.information.qz,
+				qw:sp.information.qw};
+		if (local_quat.qx && local_quat.qy && local_quat.qz && local_quat.qw) {
+			var quat_from = new THREE.Quaternion().set(local_quat.qx, local_quat.qy, local_quat.qz, local_quat.qw).normalize();
+			// rotate inverse direction z-axis because geospatial angle direction is inverse
+			var euler_from = 0.0;
+			var euler_to = headingLocalToGlobal(toDegrees(euler_from), anchor1);
+			euler_to = toRadians(headingGlobalToLocal(euler_to, anchor2));
+			quat_transform = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), euler_to).normalize();
+			quat_transform_conjugate = quat_transform.conjugate().normalize();
+			quat_to = new THREE.Quaternion().multiplyQuaternions(quat_from, quat_transform_conjugate).normalize(); 
+			
+			obj.information.qx = quat_from.x;
+			obj.information.qy = quat_from.y;
+			obj.information.qz = quat_from.z;
+			obj.information.qw = quat_from.w;
+			obj.information.absqx = quat_to.x;
+			obj.information.absqy = quat_to.y;
+			obj.information.absqz = quat_to.z;
+			obj.information.absqw = quat_to.w;
+		}
 		return obj;
 	});
 }

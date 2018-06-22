@@ -60,3 +60,27 @@ function xy2latlon(xy, anchor) {
   var latlon = mercator2latlon(mer);
   return latlon;
 }
+
+function toDegrees(angle) {
+	return angle*(180/Math.PI);
+}
+
+function toRadians(angle) {
+	return angle*(Math.PI/180);
+}
+
+function headingGlobalToLocal(heading, anchor) {
+    var localHeading = toRadians(heading - anchor.rotate);
+    var xH = Math.sin(localHeading);
+    var yH = Math.cos(localHeading);
+    var orientation = toDegrees(Math.atan2(yH,xH));
+    return orientation;
+}
+
+function headingLocalToGlobal(heading, anchor) {
+    var radHeading = toRadians(heading);
+    var xH = Math.sin(radHeading);
+    var yH = Math.cos(radHeading);
+    var orientation = toDegrees(Math.atan2(yH,xH)) + anchor.rotate;
+    return orientation;
+}
