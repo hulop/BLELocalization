@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <faceted-project>
-  <runtime name="WebSphere Application Server Liberty Profile"/>
+  <runtime name="WebSphere Application Server Liberty"/>
   <fixed facet="jst.utility"/>
   <fixed facet="java"/>
   <installed facet="java" version="1.6"/>
