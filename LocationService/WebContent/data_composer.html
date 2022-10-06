@@ -202,7 +202,7 @@ function csvSamplings(samplings, refpoint) {
 	var csv = samplings.map(function(sp) {
 		var info = sp.information; 
 		return sp.beacons.map(function(b) {
-			var a = [b.timestamp,"Beacon",info.absx,info.absy,info.z,info.floor_num];
+			var a = [b.timestamp,"Beacon",info.absx,info.absy,info.z??0,info.floor_num];
 			var effective = b.data.filter(function(d) {
 				return d.rssi < 0;
 			});
