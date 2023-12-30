@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<urlrewrite>
+
+	<rule>
+		<from>^/dbs$</from>
+		<to>/dbs</to>
+	</rule>
+	
+	<rule>
+		<from>^/js/(.*)$</from>
+		<to>/js/$1</to>
+	</rule>
+		
+	<rule>
+		<from>^/([^/]+)/data([^/]*)$</from>
+		<to>/data$2?db=$1&amp;</to>
+	</rule>
+	
+	<rule>
+		<from>^/([^/]+)/data/([^/]+)/?$</from>
+		<to>/data?db=$1&amp;type=$2</to>
+	</rule>
+
+	<rule>
+		<from>^/([^/]+)/data/([^/]+)/([^/]+)/?$</from>
+		<to>/data?db=$1&amp;type=$2&amp;id=$3</to>
+	</rule>
+
+	<rule>
+		<from>^/([^/]+)/data/([^/]+)/(.+)$</from>
+		<to>/data?db=$1&amp;type=$2&amp;id=$3</to>
+	</rule>
+	
+	
+	<rule>
+		<from>^/$</from>
+		<to>/list.jsp</to>
+	</rule>
+	
+	<rule>
+		<from>^/([^/]+)/$</from>
+		<to>/index.jsp?db=$1</to>
+	</rule>
+	
+	<rule>
+		<from>^/([^/]+)/(.*)\.jsp$</from>
+		<to>/$2.jsp?db=$1</to>
+	</rule>
+	
+	<rule>
+		<from>^/([^/]+)/(.*)\.(js|css|png)$</from>
+		<to>/$2.$3</to>
+	</rule>
+</urlrewrite>
