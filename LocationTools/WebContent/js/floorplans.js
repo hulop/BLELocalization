@@ -814,6 +814,42 @@ function showMapOnGlobal(opt) {
 		showFloorplanFormClass();
 	}
 
+	function importFloorplans(file){
+		if(file){
+			var fr = new FileReader();
+			fr.onload = function() {
+				var floormaps = JSON.parse(fr.result);
+				floormaps.forEach(function(floormap){
+					// selectedFloorplan = obj = obj || {};
+					var form = $('#floorplan_form form');
+					$('#name').val('');
+					$('#comment').val('');
+					$('#is_tile')[0].checked = floormap.tile_url || false;
+					$('#tile_url').val(floormap.tile_url || '');
+					$('#file').val('');
+					$('#filename').val(floormap.filename || '');
+					$('#floorplan_id').val(floormap.id || '');
+					$('#group').val(floormap.group || "floorplan.json");
+					$('#floor').val(floormap.floor || 0);
+					$('#origin_x').val(floormap.origin_x || 0);
+					$('#origin_y').val(floormap.origin_y || 0);
+					$('#ppm_x').val(floormap.ppm_x || 1);
+					$('#ppm_y').val(floormap.ppm_y || 1);
+					$('#lat').val(floormap.lat || 0);
+					$('#lng').val(floormap.lng || 0);
+					$('#rotate').val(floormap.rotate || 0);
+					$('#coverage').val(floormap.coverage || 0);
+					$('#type').val(floormap.type || '');
+					$('#z-index').val(floormap.zIndex || 0);
+					$('#floor').val(floormap.floor);
+					console.log(form.find('#floorplan_id').val());
+					createFloorplan(form);
+				});
+			};
+			fr.readAsText(file);
+		}
+	}
+
 	function showMap(obj) {
 		
 		if (obj.filename) {		

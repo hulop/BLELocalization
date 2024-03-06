@@ -88,10 +88,13 @@ THE SOFTWARE.
 		<h1 class="ui-widget-header">Floor Plans <%= dbname %></h1>
 		<div style="margin-top: -10px; margin-bottom: 10px;">
 			<button id="floorplanAdd_button" onclick="showFloorplanForm()">Add
-				a floorplan</button>
+				a new floorplan</button>
 			<!--button id="reset_filter" onclick="resetFilter()">Reset
 				filter</button-->
-				
+			<div class="fileUpload btn btn-primary">
+				<span>Import floormaps.json</span>
+				<input type="file" id="import_floorplans" class="upload" onchange="importFloorplans(this.files[0])"/>
+			</div>
 			<button id="editSelectedFloorplans" onclick="editSelectedFloorplans()">Edit selected floorplans</button>
 			<button id="exportFloorplans" onclick="exportFloorplans('floormaps.zip')">Export for MapServer</button>
 			<input type="text" id="findBeacon" placeholder="major-minor"></input>
