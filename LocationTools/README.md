@@ -50,3 +50,53 @@ SOFTWARE.
  
 - LocationService/WebContent/WEB-INF/lib
   - mongo-java-driver-3.4.0.jar
+
+
+### Setup
+1. Download libraries
+    ```
+    $ bash ./download-lib.sh
+    ```
+
+2. Prepare mongodb
+    ```
+    $  docker compose -f docker-compose-mongo.yaml up mongodb
+    ```
+    example of docker-compose-mongo.yaml
+    ```
+    version: "2.3"
+
+    services:
+      mongodb:
+        image : mongo:3.4.3
+        environment:
+          - PUID=1000
+          - PGID=1000
+        volumes:
+          - ./mongodb/database:/data/db
+        ports:
+          - 127.0.0.1:27017:27017  # expose db to localhost
+        networks:
+          - mongodb_network
+        healthcheck:
+          test: echo 'db.runCommand("ping").ok' | mongo mongodb:27017/test --quiet
+          interval: 3s
+          timeout: 3s
+          retries: 5
+
+    networks:
+      mongodb_network:
+        name: mongodb_network
+    ```
+
+3. Launch the server app
+
+4. Login as admin
+
+5. Create a new database
+
+    ![Screenshot from 2023-12-19 01-50-28](https://github.com/CMU-cabot/TODO-Consortium/assets/141628678/f40d0410-5fa4-4552-bfbc-f330dd0503e2)
+
+6. Click the created database and add a floorplan
+
+    ![Screenshot from 2023-12-19 01-57-00](https://github.com/CMU-cabot/TODO-Consortium/assets/141628678/4b307123-0526-4982-b5d9-8ad49adfa20f)
