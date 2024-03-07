@@ -92,8 +92,9 @@ THE SOFTWARE.
 			<!--button id="reset_filter" onclick="resetFilter()">Reset
 				filter</button-->
 			<div class="fileUpload btn btn-primary">
-				<span>Import floormaps.json</span>
-				<input type="file" id="import_floorplans" class="upload" onchange="importFloorplans(this.files[0])"/>
+				<span>Import MapService attachments</span>
+				<input type="file" id="import_attachments" webkitdirectory directory multiple
+				 class="upload" onchange="importAttachments(this.files)"/>
 			</div>
 			<button id="editSelectedFloorplans" onclick="editSelectedFloorplans()">Edit selected floorplans</button>
 			<button id="exportFloorplans" onclick="exportFloorplans('floormaps.zip')">Export for MapServer</button>
