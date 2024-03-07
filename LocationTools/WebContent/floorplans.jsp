@@ -88,16 +88,27 @@ THE SOFTWARE.
 		<h1 class="ui-widget-header">Floor Plans <%= dbname %></h1>
 		<div style="margin-top: -10px; margin-bottom: 10px;">
 			<button id="floorplanAdd_button" onclick="showFloorplanForm()">Add
-				a floorplan</button>
+				a new floorplan</button>
 			<!--button id="reset_filter" onclick="resetFilter()">Reset
 				filter</button-->
-				
 			<button id="editSelectedFloorplans" onclick="editSelectedFloorplans()">Edit selected floorplans</button>
 			<button id="exportFloorplans" onclick="exportFloorplans('floormaps.zip')">Export for MapServer</button>
 			<input type="text" id="findBeacon" placeholder="major-minor"></input>
 			<button id="findBeaconBtn" onclick="findBeacon()">Find Beacon</button>
 			<button id="findDupBeacons" onclick="findDupBeacons()">Find Duplicated Beacons</button>
 			<br>
+			CaBot Mapping:
+			<div class="fileUpload btn btn-primary">
+				<span>Import MapService attachments</span>
+				<input type="file" id="import_attachments" webkitdirectory directory multiple
+				 class="upload" onchange="importAttachments(this.files)"/>
+			</div>
+			<div class="fileUpload btn btn-primary">
+				<span>Import Mapping Data</span>
+				<input type="file" id="import_mapping_data" webkitdirectory directory multiple
+				 class="upload" onchange="importMappingData(this.files)"/>
+			</div>
+			|
 			<div class="fileUpload btn btn-primary">
 				<span>Load route GeoJSON</span>
 				<input type="file" id="load_route_geojson_file" class="upload" onchange="loadRouteGeoJSON(this.files[0])"/>
